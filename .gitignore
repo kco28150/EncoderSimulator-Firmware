@@ -1,0 +1,19 @@
+# Sorties de compilation STM32CubeIDE
+Debug/
+Release/
+*.elf
+*.map
+*.list
+*.hex
+*.bin
+*.o
+*.d
+*.su
+*.cyclo
+
+# Fichiers propres à la machine / à l'espace de travail
+.metadata/
+.settings/language.settings.xml
+*.bak
+*_save
+MXTmpFiles/
