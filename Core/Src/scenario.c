@@ -26,7 +26,12 @@ static uint32_t s_ticks[SCN_NSEG];
 static uint32_t s_states[SCN_NSEG];
 static uint16_t s_running = 0;
 
-/* cos() sans libm : reduction a [-pi, pi] puis serie de Taylor (err < 1e-6) */
+/**
+ * @brief  cos() sans libm : reduction a [-pi, pi] puis serie de Taylor
+ *         (10 termes, erreur < 1e-6).
+ * @param  x  Angle en radians.
+ * @retval cos(x).
+ */
 static double scn_cos(double x)
 {
   while (x >  SCN_PI) x -= 2.0 * SCN_PI;
@@ -40,6 +45,16 @@ static double scn_cos(double x)
   return sum;
 }
 
+/**
+ * @brief  Vitesse de consigne a une distance donnee du debut du scenario.
+ *         - SCN_SINE   : vmin + (vmax - vmin) x (1 - cos(2 pi param d / D)) / 2,
+ *                        param = nombre de periodes (debut et fin a vmin) ;
+ *         - SCN_STAIRS : param marches de longueur egale, vitesse croissant
+ *                        lineairement de vmin (1re marche) a vmax (derniere).
+ * @param  s     Scenario.
+ * @param  d_cm  Distance parcourue depuis le debut (cm, 0..|dist_cm|).
+ * @retval Vitesse en m/h.
+ */
 double SCN_SpeedAt(const SCN_Def_t *s, double d_cm)
 {
   double D = (s->dist_cm < 0.0) ? -s->dist_cm : s->dist_cm;
@@ -62,6 +77,12 @@ double SCN_SpeedAt(const SCN_Def_t *s, double d_cm)
   }
 }
 
+/**
+ * @brief  Duree estimee d'un scenario : integrale de dd / v(d), calculee par
+ *         la methode du point milieu sur 400 pas.
+ * @param  s  Scenario.
+ * @retval Duree en secondes.
+ */
 double SCN_DurationS(const SCN_Def_t *s)
 {
   double D = (s->dist_cm < 0.0) ? -s->dist_cm : s->dist_cm;
@@ -72,19 +93,42 @@ double SCN_DurationS(const SCN_Def_t *s)
   return t_h * 3600.0;
 }
 
+/**
+ * @brief  Nombre de scenarios enregistres.
+ * @retval Nombre de scenarios (numerotes de 1 a N).
+ */
 uint16_t SCN_Count(void) { return (uint16_t)SCN_N; }
 
+/**
+ * @brief  Definition d'un scenario.
+ * @param  idx  Numero du scenario (1..SCN_Count()).
+ * @retval Pointeur sur la definition, ou NULL si le numero est invalide.
+ */
 const SCN_Def_t *SCN_Get(uint16_t idx)
 {
   return (idx >= 1u && idx <= SCN_N) ? &s_scn[idx - 1u] : 0;
 }
 
+/**
+ * @brief  Scenario en cours d'execution (remis a 0 automatiquement quand le
+ *         profil se termine ou est arrete).
+ * @retval Numero du scenario, 0 si aucun.
+ */
 uint16_t SCN_Running(void)
 {
   if (!ENC_IsProfile()) s_running = 0;
   return s_running;
 }
 
+/**
+ * @brief  Lance un scenario : recalcule les tables de segments avec la
+ *         resolution courante (SCN_NSEG segments au plus, decoupage exact du
+ *         nombre total d'etats, vitesse prise au milieu de chaque segment)
+ *         puis demarre ENC_MoveProfile().
+ * @param  idx  Numero du scenario (1..SCN_Count()).
+ * @retval ENC_OK, ENC_ERR_COUNT (numero ou distance invalide), ENC_ERR_BUSY
+ *         ou ENC_ERR_FREQ (vitesse hors plage avec ce PPCM).
+ */
 ENC_Status_t SCN_Start(uint16_t idx)
 {
   const SCN_Def_t *s = SCN_Get(idx);

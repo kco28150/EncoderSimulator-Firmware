@@ -33,7 +33,14 @@ static uint32_t s_last_try;           /* derniere tentative de detection (ms) */
 /* Formatage (newlib-nano n'a pas %f)                                         */
 /* ========================================================================== */
 
-/* v avec 'dec' decimales (0..3), signe '-' seulement si non nul a l'affichage */
+/**
+ * @brief  Formate v avec 'dec' decimales (0..3) sans %f ; le signe '-' n'est
+ *         ecrit que si la valeur affichee est non nulle. |v| borne a 4e6.
+ * @param  b    Tampon de sortie.
+ * @param  n    Taille du tampon.
+ * @param  v    Valeur.
+ * @param  dec  Nombre de decimales (0..3).
+ */
 static void fmt_fix(char *b, size_t n, double v, unsigned dec)
 {
   static const uint32_t p10[] = { 1u, 10u, 100u, 1000u };
@@ -47,19 +54,33 @@ static void fmt_fix(char *b, size_t n, double v, unsigned dec)
   else           snprintf(b, n, "%s%lu.%0*lu", neg ? "-" : "", (unsigned long)ip, (int)dec, (unsigned long)fp);
 }
 
-/* Texte aligne a droite sur l'abscisse x_right (exclue) */
+/**
+ * @brief  Ecrit un texte aligne a droite sur l'abscisse x_right (exclue).
+ * @param  x_right  Bord droit (px).
+ * @param  y        Ordonnee du haut (px).
+ * @param  s        Texte.
+ * @param  scale    Taille de police.
+ */
 static void text_right(int16_t x_right, int16_t y, const char *s, uint8_t scale)
 {
   SSD1306_Text(&s_oled, (int16_t)(x_right - (int16_t)SSD1306_TextWidth(s, scale)), y, s, scale, SSD1306_ON);
 }
 
-/* Barre de progression : contour + remplissage proportionnel (0..1000 = 0..100 %) */
+/**
+ * @brief  Barre de progression : contour + remplissage proportionnel.
+ * @param  x, y, w, h  Position et taille (px).
+ * @param  permil      Avancement en pour mille (0..1000, borne a 1000).
+ */
 static void progress_bar(int16_t x, int16_t y, int16_t w, int16_t h, uint32_t permil)
 {
   SSD1306_ProgressBar(&s_oled, x, y, w, h, (uint16_t)(permil > 1000u ? 1000u : permil));
 }
 
-/* Module 0,96" a controleur SH1106 sur I2C1 (PB8 / PB9), envoi par DMA */
+/**
+ * @brief  Initialise le module 0,96" a controleur SH1106 sur I2C1 (PB8 / PB9),
+ *         envoi par DMA, avec deblocage du bus et detection de l'adresse.
+ * @retval true si l'ecran a repondu.
+ */
 static bool oled_init(void)
 {
   SSD1306_Config_t cfg;
@@ -74,8 +95,12 @@ static bool oled_init(void)
 /* Ecrans                                                                     */
 /* ========================================================================== */
 
-/* Splash : nom APAGEO centre dans la bande jaune, logo a gauche dans le bleu,
- * libelle + adresse I2C detectee + barre d'attente a droite. */
+/**
+ * @brief  Dessine le splash : nom APAGEO centre dans la bande jaune, logo a
+ *         gauche dans le bleu, libelle + adresse I2C detectee + barre
+ *         d'attente a droite.
+ * @param  el  Temps ecoule depuis le debut du splash (ms).
+ */
 static void draw_splash(uint32_t el)
 {
   char a[16];
@@ -91,7 +116,12 @@ static void draw_splash(uint32_t el)
   progress_bar(50, 55, 76, 7, el * 1000u / OLED_SPLASH_MS);
 }
 
-/* Tableau de bord */
+/**
+ * @brief  Dessine le tableau de bord : mode, sens et source de la derniere
+ *         commande (bande jaune) ; vitesse et profondeur ; progression du
+ *         mouvement ou, a l'arret, resolution et frequence.
+ * @param  now  Instant courant (ms), pour l'indicateur d'activite.
+ */
 static void draw_dash(uint32_t now)
 {
   char a[24], b[32];
@@ -164,6 +194,10 @@ static void draw_dash(uint32_t now)
 /* ========================================================================== */
 /* API                                                                        */
 /* ========================================================================== */
+/**
+ * @brief  Initialise l'OLED et affiche le splash. Un ecran absent est tolere :
+ *         OLED_UI_Task() retentera la detection periodiquement.
+ */
 void OLED_UI_Init(void)
 {
   s_t0 = s_last = s_last_try = HAL_GetTick();
@@ -171,6 +205,14 @@ void OLED_UI_Init(void)
   if (s_splash) { draw_splash(0u); SSD1306_Update(&s_oled); }
 }
 
+/**
+ * @brief  Tache OLED, a appeler en boucle (via UI_Task) :
+ *         - enchaine l'envoi DMA des pages de l'image en cours ;
+ *         - si l'ecran est absent, retente la detection toutes les
+ *           OLED_RETRY_MS ;
+ *         - toutes les OLED_REFRESH_MS (si le bus est libre), redessine le
+ *           splash pendant OLED_SPLASH_MS puis le tableau de bord.
+ */
 void OLED_UI_Task(void)
 {
   uint32_t now = HAL_GetTick();
@@ -199,8 +241,11 @@ void OLED_UI_Task(void)
   SSD1306_Update(&s_oled);
 }
 
-/* Erreur I2C pendant le DMA (ecran debranche...) : l'ecran est marque absent,
- * OLED_UI_Task() retentera une detection. */
+/**
+ * @brief  Callback HAL : erreur I2C pendant le DMA (ecran debranche...).
+ *         L'ecran est marque absent ; OLED_UI_Task() retentera une detection.
+ * @param  hi2c  Handle I2C en erreur.
+ */
 void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
 {
   SSD1306_ErrorHandler(&s_oled, hi2c);

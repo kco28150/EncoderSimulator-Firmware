@@ -32,6 +32,8 @@ void MX_USART2_UART_Init(void)
 {
 
   /* USER CODE BEGIN USART2_Init 0 */
+  /* MX_USART2_UART_Init : configure USART2 a 115200 bauds, 8N1, sans
+   * controle de flux (port COM virtuel du ST-LINK, terminal de commandes). */
 
   /* USER CODE END USART2_Init 0 */
 
@@ -63,6 +65,9 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
   if(uartHandle->Instance==USART2)
   {
   /* USER CODE BEGIN USART2_MspInit 0 */
+  /* HAL_UART_MspInit : active l'horloge USART2, configure PA2 (TX) et PA3
+   * (RX) en fonction alternative et l'interruption USART2 (priorite 1). La
+   * reception est ensuite geree en registres par cmd_parser.c. */
 
   /* USER CODE END USART2_MspInit 0 */
     /* USART2 clock enable */
@@ -95,6 +100,8 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
   if(uartHandle->Instance==USART2)
   {
   /* USER CODE BEGIN USART2_MspDeInit 0 */
+  /* HAL_UART_MspDeInit : coupe l'horloge, les broches et l'interruption
+   * d'USART2. */
 
   /* USER CODE END USART2_MspDeInit 0 */
     /* Peripheral clock disable */

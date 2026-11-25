@@ -74,6 +74,8 @@ extern UART_HandleTypeDef huart2;
 void NMI_Handler(void)
 {
   /* USER CODE BEGIN NonMaskableInt_IRQn 0 */
+  /* NMI_Handler : interruption non masquable (ex. defaillance d'horloge
+   * HSE detectee par le CSS). Bloque le programme. */
 
   /* USER CODE END NonMaskableInt_IRQn 0 */
   /* USER CODE BEGIN NonMaskableInt_IRQn 1 */
@@ -89,6 +91,8 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
+  /* HardFault_Handler : faute materielle (acces memoire invalide, pile
+   * debordee...). Bloque le programme : examiner la pile en debug. */
 
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
@@ -104,6 +108,8 @@ void HardFault_Handler(void)
 void MemManage_Handler(void)
 {
   /* USER CODE BEGIN MemoryManagement_IRQn 0 */
+  /* MemManage_Handler : violation de protection memoire (MPU). Bloque le
+   * programme. */
 
   /* USER CODE END MemoryManagement_IRQn 0 */
   while (1)
@@ -119,6 +125,8 @@ void MemManage_Handler(void)
 void BusFault_Handler(void)
 {
   /* USER CODE BEGIN BusFault_IRQn 0 */
+  /* BusFault_Handler : erreur de bus (pre-chargement ou acces memoire).
+   * Bloque le programme. */
 
   /* USER CODE END BusFault_IRQn 0 */
   while (1)
@@ -134,6 +142,8 @@ void BusFault_Handler(void)
 void UsageFault_Handler(void)
 {
   /* USER CODE BEGIN UsageFault_IRQn 0 */
+  /* UsageFault_Handler : instruction indefinie ou etat illegal du coeur.
+   * Bloque le programme. */
 
   /* USER CODE END UsageFault_IRQn 0 */
   while (1)
@@ -149,6 +159,7 @@ void UsageFault_Handler(void)
 void SVC_Handler(void)
 {
   /* USER CODE BEGIN SVCall_IRQn 0 */
+  /* SVC_Handler : appel superviseur (instruction SVC), inutilise (pas d'OS). */
 
   /* USER CODE END SVCall_IRQn 0 */
   /* USER CODE BEGIN SVCall_IRQn 1 */
@@ -162,6 +173,7 @@ void SVC_Handler(void)
 void DebugMon_Handler(void)
 {
   /* USER CODE BEGIN DebugMonitor_IRQn 0 */
+  /* DebugMon_Handler : moniteur de debug, inutilise. */
 
   /* USER CODE END DebugMonitor_IRQn 0 */
   /* USER CODE BEGIN DebugMonitor_IRQn 1 */
@@ -175,6 +187,7 @@ void DebugMon_Handler(void)
 void PendSV_Handler(void)
 {
   /* USER CODE BEGIN PendSV_IRQn 0 */
+  /* PendSV_Handler : requete systeme differee, inutilisee (pas d'OS). */
 
   /* USER CODE END PendSV_IRQn 0 */
   /* USER CODE BEGIN PendSV_IRQn 1 */
@@ -188,6 +201,8 @@ void PendSV_Handler(void)
 void SysTick_Handler(void)
 {
   /* USER CODE BEGIN SysTick_IRQn 0 */
+  /* SysTick_Handler : tick de 1 ms, incremente le compteur de HAL_GetTick()
+   * (base de temps de toutes les taches et temporisations). */
 
   /* USER CODE END SysTick_IRQn 0 */
   HAL_IncTick();
@@ -209,6 +224,8 @@ void SysTick_Handler(void)
 void TIM2_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM2_IRQn 0 */
+  /* TIM2_IRQHandler : cadence du codeur simule (4 x f par seconde). Traite
+   * directement par ENC_TimerIRQ() pour minimiser la latence. */
   ENC_TimerIRQ();      /* machine a etats en registres, HAL court-circuitee */
   return;
 
@@ -225,6 +242,8 @@ void TIM2_IRQHandler(void)
 void USART2_IRQHandler(void)
 {
   /* USER CODE BEGIN USART2_IRQn 0 */
+  /* USART2_IRQHandler : reception d'un caractere du terminal, rangee dans
+   * le tampon circulaire par CMD_UartIRQ(). */
   CMD_UartIRQ();       /* reception en registres, HAL court-circuitee */
   return;
   /* USER CODE END USART2_IRQn 0 */
@@ -240,6 +259,8 @@ void USART2_IRQHandler(void)
 void DMA1_Stream6_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Stream6_IRQn 0 */
+  /* DMA1_Stream6_IRQHandler : fin / erreur du transfert DMA d'emission
+   * I2C1 (envoi d'une page de l'OLED), traite par la HAL. */
 
   /* USER CODE END DMA1_Stream6_IRQn 0 */
   HAL_DMA_IRQHandler(&hdma_i2c1_tx);
@@ -254,6 +275,8 @@ void DMA1_Stream6_IRQHandler(void)
 void I2C1_EV_IRQHandler(void)
 {
   /* USER CODE BEGIN I2C1_EV_IRQn 0 */
+  /* I2C1_EV_IRQHandler : evenements I2C1 (fin de transfert...), traites par
+   * la HAL pour l'envoi DMA de l'OLED. */
 
   /* USER CODE END I2C1_EV_IRQn 0 */
   HAL_I2C_EV_IRQHandler(&hi2c1);
@@ -268,6 +291,8 @@ void I2C1_EV_IRQHandler(void)
 void I2C1_ER_IRQHandler(void)
 {
   /* USER CODE BEGIN I2C1_ER_IRQn 0 */
+  /* I2C1_ER_IRQHandler : erreurs I2C1 (NACK, perte d'arbitrage...) ; la HAL
+   * appelle ensuite HAL_I2C_ErrorCallback() (oled_ui.c). */
 
   /* USER CODE END I2C1_ER_IRQn 0 */
   HAL_I2C_ER_IRQHandler(&hi2c1);

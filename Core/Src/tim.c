@@ -31,6 +31,9 @@ void MX_TIM2_Init(void)
 {
 
   /* USER CODE BEGIN TIM2_Init 0 */
+  /* MX_TIM2_Init : configure TIM2 (32 bits) sur l'horloge interne, sans
+   * prescaler, avec preload de ARR. La periode et le demarrage sont ensuite
+   * geres directement en registres par encoder_sim.c. */
 
   /* USER CODE END TIM2_Init 0 */
 
@@ -73,6 +76,8 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
   if(tim_baseHandle->Instance==TIM2)
   {
   /* USER CODE BEGIN TIM2_MspInit 0 */
+  /* HAL_TIM_Base_MspInit : active l'horloge de TIM2 et son interruption avec
+   * la priorite la plus haute (0) : la cadence des etats A/B en depend. */
 
   /* USER CODE END TIM2_MspInit 0 */
     /* TIM2 clock enable */
@@ -93,6 +98,7 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
   if(tim_baseHandle->Instance==TIM2)
   {
   /* USER CODE BEGIN TIM2_MspDeInit 0 */
+  /* HAL_TIM_Base_MspDeInit : coupe l'horloge et l'interruption de TIM2. */
 
   /* USER CODE END TIM2_MspDeInit 0 */
     /* Peripheral clock disable */

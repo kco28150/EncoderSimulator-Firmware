@@ -63,6 +63,8 @@ void HAL_MspInit(void)
 {
 
   /* USER CODE BEGIN MspInit 0 */
+  /* HAL_MspInit : appelee par HAL_Init(). Active les horloges SYSCFG et PWR
+   * et choisit 4 bits de priorite preemptive (NVIC_PRIORITYGROUP_4). */
 
   /* USER CODE END MspInit 0 */
 

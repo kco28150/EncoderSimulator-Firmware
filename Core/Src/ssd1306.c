@@ -31,13 +31,25 @@
 
 #define W   SSD1306_MAX_WIDTH                       /* largeur : toujours 128 */
 
+/**
+ * @brief  Nombre de pages de 8 lignes de l'ecran (4 ou 8).
+ * @param  d  Ecran.
+ * @retval Nombre de pages.
+ */
 static inline uint8_t pages(const SSD1306_t *d) { return (uint8_t)(d->cfg.height / 8u); }
 
 /* ========================================================================== */
 /* Bas niveau                                                                 */
 /* ========================================================================== */
 
-/* Envoie une suite de commandes (octet de controle 0x00), en mode bloquant */
+/**
+ * @brief  Envoie une suite de commandes (octet de controle 0x00), en mode
+ *         bloquant.
+ * @param  d  Ecran.
+ * @param  c  Commandes.
+ * @param  n  Nombre d'octets.
+ * @retval true si l'ecran a acquitte.
+ */
 static bool cmd(SSD1306_t *d, const uint8_t *c, uint16_t n)
 {
   if (!d->addr8) return false;
@@ -45,9 +57,21 @@ static bool cmd(SSD1306_t *d, const uint8_t *c, uint16_t n)
                            (uint8_t *)c, n, SSD1306_I2C_TIMEOUT_MS) == HAL_OK;
 }
 
+/**
+ * @brief  Envoie une commande d'un seul octet (bloquant).
+ * @param  d  Ecran.
+ * @param  c  Commande.
+ * @retval true si l'ecran a acquitte.
+ */
 static bool cmd1(SSD1306_t *d, uint8_t c) { return cmd(d, &c, 1); }
 
-/* Positionne l'ecriture au debut de la page p */
+/**
+ * @brief  Positionne l'ecriture au debut de la page p (decalage de 2 colonnes
+ *         pour le SH1106).
+ * @param  d  Ecran.
+ * @param  p  Numero de page.
+ * @retval true si l'ecran a acquitte.
+ */
 static bool set_page(SSD1306_t *d, uint8_t p)
 {
   uint8_t off = (d->cfg.controller == SSD1306_CTRL_SH1106) ? 2u : 0u;
@@ -60,7 +84,12 @@ static bool set_page(SSD1306_t *d, uint8_t p)
   return cmd(d, c, 3);
 }
 
-/* Envoie une page de d->tx en mode bloquant (~3 ms a 400 kHz) */
+/**
+ * @brief  Envoie une page de d->tx en mode bloquant (~3 ms a 400 kHz).
+ * @param  d  Ecran.
+ * @param  p  Numero de page.
+ * @retval true si l'ecran a acquitte.
+ */
 static bool write_page_blocking(SSD1306_t *d, uint8_t p)
 {
   return set_page(d, p) &&
@@ -68,16 +97,24 @@ static bool write_page_blocking(SSD1306_t *d, uint8_t p)
                            &d->tx[p * W], W, SSD1306_I2C_TIMEOUT_MS + 10u) == HAL_OK;
 }
 
-/* ~5 us quelle que soit l'horloge du coeur (boucle de ~4 cycles) */
+/**
+ * @brief  Attente d'environ 5 us quelle que soit l'horloge du coeur (boucle de
+ *         ~4 cycles), pour la generation manuelle de SCL.
+ */
 static void delay_5us(void)
 {
   for (volatile uint32_t i = SystemCoreClock / 800000u; i > 0u; i--) { }
 }
 
-/* Deblocage du bus : si un esclave a ete interrompu au milieu d'un octet
- * (reset du micro, reflashage...), il peut maintenir SDA a 0 indefiniment.
- * On genere jusqu'a 9 impulsions sur SCL "a la main" puis une condition STOP,
- * ce qui lui fait terminer son octet et relacher la ligne. */
+/**
+ * @brief  Deblocage du bus : si un esclave a ete interrompu au milieu d'un
+ *         octet (reset du micro, reflashage...), il peut maintenir SDA a 0
+ *         indefiniment. On genere jusqu'a 9 impulsions sur SCL "a la main" puis
+ *         une condition STOP, ce qui lui fait terminer son octet et relacher la
+ *         ligne. Le peripherique I2C est ensuite reinitialise. Sans effet si les
+ *         broches SCL / SDA ne sont pas renseignees dans la configuration.
+ * @param  d  Ecran.
+ */
 static void bus_recover(SSD1306_t *d)
 {
   const SSD1306_Config_t *c = &d->cfg;
@@ -115,6 +152,12 @@ static void bus_recover(SSD1306_t *d)
 /* ========================================================================== */
 /* Controle                                                                   */
 /* ========================================================================== */
+/**
+ * @brief  Remplit une configuration par defaut : adresse auto-detectee,
+ *         SSD1306 128 x 64, contraste 0xCF, envoi par DMA si disponible.
+ * @param  cfg   Configuration a remplir.
+ * @param  hi2c  Handle I2C a utiliser.
+ */
 void SSD1306_DefaultConfig(SSD1306_Config_t *cfg, I2C_HandleTypeDef *hi2c)
 {
   memset(cfg, 0, sizeof *cfg);
@@ -127,6 +170,15 @@ void SSD1306_DefaultConfig(SSD1306_Config_t *cfg, I2C_HandleTypeDef *hi2c)
   cfg->use_dma    = true;
 }
 
+/**
+ * @brief  Initialise l'ecran : deblocage du bus, detection de l'adresse (0x3C
+ *         puis 0x3D, ou adresse imposee), sequence de configuration propre au
+ *         controleur, effacement de la RAM puis allumage. Bloquant (quelques
+ *         dizaines de ms). Peut etre rappelee pour une nouvelle detection.
+ * @param  d    Ecran (etat interne).
+ * @param  cfg  Configuration (copiee).
+ * @retval true si l'ecran a repondu et est initialise.
+ */
 bool SSD1306_Init(SSD1306_t *d, const SSD1306_Config_t *cfg)
 {
   if (d == NULL || cfg == NULL || cfg->hi2c == NULL) return false;
@@ -195,18 +247,48 @@ bool SSD1306_Init(SSD1306_t *d, const SSD1306_Config_t *cfg)
   return true;
 }
 
+/**
+ * @brief  Indique si l'ecran est initialise et sans erreur I2C depuis.
+ * @param  d  Ecran.
+ * @retval true si l'ecran est utilisable.
+ */
 bool    SSD1306_Present(const SSD1306_t *d) { return d->ok; }
+/**
+ * @brief  Adresse I2C detectee.
+ * @param  d  Ecran.
+ * @retval Adresse 7 bits (0 si aucun ecran).
+ */
 uint8_t SSD1306_Address(const SSD1306_t *d) { return (uint8_t)(d->addr8 >> 1); }
+/**
+ * @brief  Largeur de l'ecran.
+ * @param  d  Ecran (inutilise).
+ * @retval Largeur en pixels (toujours 128).
+ */
 uint8_t SSD1306_Width(const SSD1306_t *d)   { (void)d; return W; }
+/**
+ * @brief  Hauteur de l'ecran.
+ * @param  d  Ecran.
+ * @retval Hauteur en pixels (32 ou 64).
+ */
 uint8_t SSD1306_Height(const SSD1306_t *d)  { return d->cfg.height; }
 
+/**
+ * @brief  Indique si une image est en cours d'envoi ou si le bus I2C est
+ *         occupe.
+ * @param  d  Ecran.
+ * @retval true si occupe.
+ */
 bool SSD1306_Busy(const SSD1306_t *d)
 {
   return d->page >= 0 || HAL_I2C_GetState(d->cfg.hi2c) != HAL_I2C_STATE_READY;
 }
 
-/* Envoie la page suivante si le bus est libre. Une page = 3 commandes en mode
- * bloquant (~80 us) puis 128 octets par DMA (~3 ms). */
+/**
+ * @brief  Envoie la page suivante si le bus est libre : 3 commandes en mode
+ *         bloquant (~80 us) puis 128 octets par DMA (~3 ms). Termine l'image
+ *         apres la derniere page ; marque l'ecran absent en cas d'erreur.
+ * @param  d  Ecran.
+ */
 static void send_next_page(SSD1306_t *d)
 {
   if (d->page < 0 || HAL_I2C_GetState(d->cfg.hi2c) != HAL_I2C_STATE_READY) return;
@@ -223,11 +305,24 @@ static void send_next_page(SSD1306_t *d)
   d->page++;
 }
 
+/**
+ * @brief  Enchaine l'envoi DMA des pages, a appeler souvent depuis la boucle
+ *         principale (jamais en interruption). Sans effet en mode bloquant.
+ * @param  d  Ecran.
+ */
 void SSD1306_Task(SSD1306_t *d)
 {
   if (d->ok && d->dma) send_next_page(d);
 }
 
+/**
+ * @brief  Envoie le tampon de dessin a l'ecran. Le tampon est d'abord copie
+ *         dans le tampon d'emission : on peut redessiner pendant l'envoi.
+ *         En DMA, l'envoi se poursuit dans SSD1306_Task() ; sinon il est
+ *         bloquant (~25 ms pour 8 pages).
+ * @param  d  Ecran.
+ * @retval false si l'ecran est absent, occupe ou en erreur.
+ */
 bool SSD1306_Update(SSD1306_t *d)
 {
   if (!d->ok) return false;
@@ -247,6 +342,13 @@ bool SSD1306_Update(SSD1306_t *d)
   return d->ok;
 }
 
+/**
+ * @brief  A appeler depuis HAL_I2C_ErrorCallback() : si l'erreur concerne le
+ *         bus de cet ecran (debranche...), il est marque absent ; l'application
+ *         peut rappeler SSD1306_Init() plus tard.
+ * @param  d     Ecran.
+ * @param  hi2c  Handle I2C en erreur.
+ */
 void SSD1306_ErrorHandler(SSD1306_t *d, I2C_HandleTypeDef *hi2c)
 {
   /* Erreur I2C pendant le DMA (ecran debranche...) : l'ecran est marque absent,
@@ -254,8 +356,25 @@ void SSD1306_ErrorHandler(SSD1306_t *d, I2C_HandleTypeDef *hi2c)
   if (d != NULL && hi2c == d->cfg.hi2c) { d->ok = false; d->page = -1; }
 }
 
+/**
+ * @brief  Allume ou eteint l'affichage (la RAM est conservee). Ignore si
+ *         l'ecran est occupe.
+ * @param  d   Ecran.
+ * @param  on  true pour allumer.
+ */
 void SSD1306_DisplayOn(SSD1306_t *d, bool on)  { if (d->ok && !SSD1306_Busy(d)) cmd1(d, on ? 0xAF : 0xAE); }
+/**
+ * @brief  Active ou desactive la video inverse. Ignore si l'ecran est occupe.
+ * @param  d    Ecran.
+ * @param  inv  true pour inverser.
+ */
 void SSD1306_Invert(SSD1306_t *d, bool inv)    { if (d->ok && !SSD1306_Busy(d)) cmd1(d, inv ? 0xA7 : 0xA6); }
+/**
+ * @brief  Regle le contraste (memorise meme si l'ecran est occupe, envoye
+ *         seulement s'il est libre).
+ * @param  d  Ecran.
+ * @param  v  Contraste (0..255).
+ */
 void SSD1306_Contrast(SSD1306_t *d, uint8_t v)
 {
   uint8_t c[2] = { 0x81, v };
@@ -266,9 +385,23 @@ void SSD1306_Contrast(SSD1306_t *d, uint8_t v)
 /* ========================================================================== */
 /* Dessin                                                                     */
 /* ========================================================================== */
+/**
+ * @brief  Acces direct au tampon de dessin (pages de 8 lignes, bit 0 en haut).
+ * @param  d  Ecran.
+ * @retval Pointeur sur le tampon.
+ */
 uint8_t *SSD1306_Buffer(SSD1306_t *d) { return d->fb; }
 
+/**
+ * @brief  Efface le tampon de dessin (tous les pixels eteints).
+ * @param  d  Ecran.
+ */
 void SSD1306_Clear(SSD1306_t *d) { memset(d->fb, 0x00, sizeof d->fb); }
+/**
+ * @brief  Remplit le tampon de dessin (allume, eteint ou inverse tout).
+ * @param  d  Ecran.
+ * @param  c  SSD1306_ON, SSD1306_OFF ou SSD1306_INV.
+ */
 void SSD1306_Fill(SSD1306_t *d, SSD1306_Color_t c)
 {
   if (c == SSD1306_INV)
@@ -277,6 +410,12 @@ void SSD1306_Fill(SSD1306_t *d, SSD1306_Color_t c)
     memset(d->fb, (c == SSD1306_ON) ? 0xFF : 0x00, sizeof d->fb);
 }
 
+/**
+ * @brief  Allume, eteint ou inverse un pixel (ignore hors de l'ecran).
+ * @param  d     Ecran.
+ * @param  x, y  Position (px).
+ * @param  c     Couleur.
+ */
 void SSD1306_Pixel(SSD1306_t *d, int16_t x, int16_t y, SSD1306_Color_t c)
 {
   if (x < 0 || y < 0 || x >= W || y >= d->cfg.height) return;
@@ -287,23 +426,49 @@ void SSD1306_Pixel(SSD1306_t *d, int16_t x, int16_t y, SSD1306_Color_t c)
   else                       *p ^= m;
 }
 
+/**
+ * @brief  Lit un pixel du tampon de dessin.
+ * @param  d     Ecran.
+ * @param  x, y  Position (px).
+ * @retval true si le pixel est allume (false hors de l'ecran).
+ */
 bool SSD1306_GetPixel(const SSD1306_t *d, int16_t x, int16_t y)
 {
   if (x < 0 || y < 0 || x >= W || y >= d->cfg.height) return false;
   return (d->fb[(y >> 3) * W + x] >> (y & 7)) & 1u;
 }
 
+/**
+ * @brief  Trace une ligne horizontale.
+ * @param  d     Ecran.
+ * @param  x, y  Point de depart (px).
+ * @param  w     Longueur (px).
+ * @param  c     Couleur.
+ */
 void SSD1306_HLine(SSD1306_t *d, int16_t x, int16_t y, int16_t w, SSD1306_Color_t c)
 {
   for (int16_t i = 0; i < w; i++) SSD1306_Pixel(d, (int16_t)(x + i), y, c);
 }
 
+/**
+ * @brief  Trace une ligne verticale.
+ * @param  d     Ecran.
+ * @param  x, y  Point de depart (px).
+ * @param  h     Longueur (px).
+ * @param  c     Couleur.
+ */
 void SSD1306_VLine(SSD1306_t *d, int16_t x, int16_t y, int16_t h, SSD1306_Color_t c)
 {
   for (int16_t i = 0; i < h; i++) SSD1306_Pixel(d, x, (int16_t)(y + i), c);
 }
 
-/* Bresenham */
+/**
+ * @brief  Trace un segment quelconque (algorithme de Bresenham).
+ * @param  d       Ecran.
+ * @param  x0, y0  Premiere extremite (px).
+ * @param  x1, y1  Seconde extremite (px).
+ * @param  c       Couleur.
+ */
 void SSD1306_Line(SSD1306_t *d, int16_t x0, int16_t y0, int16_t x1, int16_t y1, SSD1306_Color_t c)
 {
   int16_t dx = (int16_t)(x1 > x0 ? x1 - x0 : x0 - x1);
@@ -322,11 +487,26 @@ void SSD1306_Line(SSD1306_t *d, int16_t x0, int16_t y0, int16_t x1, int16_t y1, 
   }
 }
 
+/**
+ * @brief  Remplit un rectangle.
+ * @param  d     Ecran.
+ * @param  x, y  Coin haut gauche (px).
+ * @param  w, h  Taille (px).
+ * @param  c     Couleur.
+ */
 void SSD1306_FillRect(SSD1306_t *d, int16_t x, int16_t y, int16_t w, int16_t h, SSD1306_Color_t c)
 {
   for (int16_t j = 0; j < h; j++) SSD1306_HLine(d, x, (int16_t)(y + j), w, c);
 }
 
+/**
+ * @brief  Trace le contour d'un rectangle (chaque pixel une seule fois, ce
+ *         qui le rend compatible avec SSD1306_INV).
+ * @param  d     Ecran.
+ * @param  x, y  Coin haut gauche (px).
+ * @param  w, h  Taille (px).
+ * @param  c     Couleur.
+ */
 void SSD1306_Rect(SSD1306_t *d, int16_t x, int16_t y, int16_t w, int16_t h, SSD1306_Color_t c)
 {
   if (w <= 0 || h <= 0) return;
@@ -336,7 +516,14 @@ void SSD1306_Rect(SSD1306_t *d, int16_t x, int16_t y, int16_t w, int16_t h, SSD1
   if (w > 1) SSD1306_VLine(d, (int16_t)(x + w - 1), (int16_t)(y + 1), (int16_t)(h - 2), c);
 }
 
-/* Cercle par l'algorithme du point milieu */
+/**
+ * @brief  Trace un cercle (algorithme du point milieu). En SSD1306_INV, aucun
+ *         point n'est dessine deux fois.
+ * @param  d       Ecran.
+ * @param  cx, cy  Centre (px).
+ * @param  r       Rayon (px).
+ * @param  c       Couleur.
+ */
 void SSD1306_Circle(SSD1306_t *d, int16_t cx, int16_t cy, int16_t r, SSD1306_Color_t c)
 {
   if (r < 0) return;
@@ -368,6 +555,13 @@ void SSD1306_Circle(SSD1306_t *d, int16_t cx, int16_t cy, int16_t r, SSD1306_Col
   }
 }
 
+/**
+ * @brief  Remplit un disque, ligne horizontale par ligne horizontale.
+ * @param  d       Ecran.
+ * @param  cx, cy  Centre (px).
+ * @param  r       Rayon (px).
+ * @param  c       Couleur.
+ */
 void SSD1306_FillCircle(SSD1306_t *d, int16_t cx, int16_t cy, int16_t r, SSD1306_Color_t c)
 {
   if (r < 0) return;
@@ -380,6 +574,15 @@ void SSD1306_FillCircle(SSD1306_t *d, int16_t cx, int16_t cy, int16_t r, SSD1306
   }
 }
 
+/**
+ * @brief  Dessine un triangle isocele plein (fleche).
+ * @param  d     Ecran.
+ * @param  cx    Abscisse de l'axe (px).
+ * @param  ytop  Ordonnee du haut (px).
+ * @param  h     Hauteur (>= 2).
+ * @param  up    true : pointe en haut ; false : pointe en bas.
+ * @param  c     Couleur.
+ */
 void SSD1306_Triangle(SSD1306_t *d, int16_t cx, int16_t ytop, int16_t h, bool up, SSD1306_Color_t c)
 {
   if (h < 2) return;
@@ -392,6 +595,14 @@ void SSD1306_Triangle(SSD1306_t *d, int16_t cx, int16_t ytop, int16_t h, bool up
   }
 }
 
+/**
+ * @brief  Barre de progression : contour, fond efface, remplissage
+ *         proportionnel.
+ * @param  d         Ecran.
+ * @param  x, y      Coin haut gauche (px).
+ * @param  w, h      Taille (px, >= 5).
+ * @param  permille  Avancement en pour mille (0..1000).
+ */
 void SSD1306_ProgressBar(SSD1306_t *d, int16_t x, int16_t y, int16_t w, int16_t h, uint16_t permille)
 {
   if (w < 5 || h < 5) return;
@@ -402,6 +613,12 @@ void SSD1306_ProgressBar(SSD1306_t *d, int16_t x, int16_t y, int16_t w, int16_t 
   SSD1306_FillRect(d, (int16_t)(x + 2), (int16_t)(y + 2), fill, (int16_t)(h - 4), SSD1306_ON);
 }
 
+/**
+ * @brief  Largeur d'un texte (ligne la plus longue s'il contient des '\n').
+ * @param  s      Texte.
+ * @param  scale  Taille de police (1..4).
+ * @retval Largeur en pixels (6 px par caractere x scale).
+ */
 uint16_t SSD1306_TextWidth(const char *s, uint8_t scale)
 {
   uint16_t best = 0, cur = 0;
@@ -416,6 +633,18 @@ uint16_t SSD1306_TextWidth(const char *s, uint8_t scale)
   return (uint16_t)(best * 6u * scale);
 }
 
+/**
+ * @brief  Ecrit un texte en police 5x7 (cellule 6 x 8 x scale). '\n' revient
+ *         a la ligne ; un caractere hors police est remplace par '?'. En ON ou
+ *         OFF le fond de la cellule est ecrit dans la couleur opposee ; en INV,
+ *         seuls les pixels du caractere sont inverses.
+ * @param  d      Ecran.
+ * @param  x, y   Coin haut gauche (px).
+ * @param  s      Texte.
+ * @param  scale  Taille de police (1..4).
+ * @param  c      Couleur.
+ * @retval Abscisse a droite du dernier caractere ecrit.
+ */
 int16_t SSD1306_Text(SSD1306_t *d, int16_t x, int16_t y, const char *s, uint8_t scale, SSD1306_Color_t c)
 {
   if (scale < 1u) scale = 1u;
@@ -450,12 +679,29 @@ int16_t SSD1306_Text(SSD1306_t *d, int16_t x, int16_t y, const char *s, uint8_t 
   return x;
 }
 
+/**
+ * @brief  Ecrit un texte centre horizontalement sur l'ecran.
+ * @param  d      Ecran.
+ * @param  y      Ordonnee du haut (px).
+ * @param  s      Texte.
+ * @param  scale  Taille de police.
+ * @param  c      Couleur.
+ */
 void SSD1306_TextCentered(SSD1306_t *d, int16_t y, const char *s, uint8_t scale, SSD1306_Color_t c)
 {
   int16_t x = (int16_t)((W - (int16_t)SSD1306_TextWidth(s, scale)) / 2);
   SSD1306_Text(d, x < 0 ? 0 : x, y, s, scale, c);
 }
 
+/**
+ * @brief  Ecrit un texte formate facon printf (64 caracteres max).
+ * @param  d      Ecran.
+ * @param  x, y   Coin haut gauche (px).
+ * @param  scale  Taille de police.
+ * @param  c      Couleur.
+ * @param  fmt    Format printf, suivi des arguments.
+ * @retval Abscisse a droite du dernier caractere ecrit.
+ */
 int16_t SSD1306_Printf(SSD1306_t *d, int16_t x, int16_t y, uint8_t scale, SSD1306_Color_t c,
                        const char *fmt, ...)
 {
@@ -467,6 +713,15 @@ int16_t SSD1306_Printf(SSD1306_t *d, int16_t x, int16_t y, uint8_t scale, SSD130
   return SSD1306_Text(d, x, y, buf, scale, c);
 }
 
+/**
+ * @brief  Dessine une image 1 bit par pixel (lignes de (w + 7) / 8 octets,
+ *         bit de poids fort a gauche). Seuls les pixels a 1 sont dessines.
+ * @param  d     Ecran.
+ * @param  x, y  Coin haut gauche (px).
+ * @param  w, h  Taille de l'image (px).
+ * @param  bits  Donnees de l'image.
+ * @param  c     Couleur des pixels a 1.
+ */
 void SSD1306_Bitmap(SSD1306_t *d, int16_t x, int16_t y, int16_t w, int16_t h,
                     const uint8_t *bits, SSD1306_Color_t c)
 {

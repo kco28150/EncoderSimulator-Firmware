@@ -31,6 +31,9 @@ void MX_SPI2_Init(void)
 {
 
   /* USER CODE BEGIN SPI2_Init 0 */
+  /* MX_SPI2_Init : configure SPI2 en maitre 8 bits, mode 0 (CPOL = 0,
+   * CPHA = 0), MSB en premier, NSS logiciel, horloge APB1 / 4 = 12,5 MHz,
+   * pour l'ecran ILI9341. Le CS est pilote par tft.c. */
 
   /* USER CODE END SPI2_Init 0 */
 
@@ -66,6 +69,8 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* spiHandle)
   if(spiHandle->Instance==SPI2)
   {
   /* USER CODE BEGIN SPI2_MspInit 0 */
+  /* HAL_SPI_MspInit : appelee par HAL_SPI_Init(). Active l'horloge SPI2 et
+   * configure PB13 (SCK), PB14 (MISO), PB15 (MOSI) en fonction alternative. */
 
   /* USER CODE END SPI2_MspInit 0 */
     /* SPI2 clock enable */
@@ -96,6 +101,7 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef* spiHandle)
   if(spiHandle->Instance==SPI2)
   {
   /* USER CODE BEGIN SPI2_MspDeInit 0 */
+  /* HAL_SPI_MspDeInit : coupe l'horloge SPI2 et libere ses broches. */
 
   /* USER CODE END SPI2_MspDeInit 0 */
     /* Peripheral clock disable */

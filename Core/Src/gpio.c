@@ -29,6 +29,14 @@
 /* Configure GPIO                                                             */
 /*----------------------------------------------------------------------------*/
 /* USER CODE BEGIN 1 */
+/* MX_GPIO_Init : active les horloges des ports A, B, C, H et configure les
+ * broches utilisees en GPIO :
+ *   - ENC_A / ENC_B (PA8 / PA9) : sorties push-pull du codeur simule, a 0 ;
+ *   - LD2 : LED verte (allumee pendant un mouvement) ;
+ *   - B1 : bouton utilisateur, interruption sur front descendant ;
+ *   - Touch_CLK / CS / MOSI en sortie, Touch_MISO et Touch_IRQ (pull-up) en
+ *     entree : SPI logiciel du controleur tactile XPT2046 ;
+ *   - Screen_DCRS / CS / RST : commande de l'ecran ILI9341 (CS au repos a 1). */
 
 /* USER CODE END 1 */
 

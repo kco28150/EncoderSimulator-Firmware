@@ -30,6 +30,9 @@
 /*----------------------------------------------------------------------------*/
 
 /* USER CODE BEGIN 1 */
+/* MX_DMA_Init : active l'horloge du DMA1 et l'interruption du flux
+ * DMA1 Stream6 (emission I2C1 vers l'OLED), priorite 2. A appeler avant
+ * MX_I2C1_Init(), qui lie ce flux a I2C1. */
 
 /* USER CODE END 1 */
 

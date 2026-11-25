@@ -32,6 +32,8 @@ void MX_I2C1_Init(void)
 {
 
   /* USER CODE BEGIN I2C1_Init 0 */
+  /* MX_I2C1_Init : configure I2C1 en maitre, mode rapide 400 kHz, adresses
+   * 7 bits, pour l'ecran OLED SH1106 / SSD1306. */
 
   /* USER CODE END I2C1_Init 0 */
 
@@ -64,6 +66,11 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef* i2cHandle)
   if(i2cHandle->Instance==I2C1)
   {
   /* USER CODE BEGIN I2C1_MspInit 0 */
+  /* HAL_I2C_MspInit : appelee par HAL_I2C_Init(). Configure PB8 (SCL) et PB9
+   * (SDA) en drain ouvert avec pull-up, active l'horloge I2C1, le DMA
+   * d'emission (DMA1 Stream6 canal 1, memoire -> peripherique) et les
+   * interruptions evenement / erreur d'I2C1 (priorite 2). Aussi rappelee par
+   * le deblocage du bus de ssd1306.c. */
 
   /* USER CODE END I2C1_MspInit 0 */
 
@@ -118,6 +125,9 @@ void HAL_I2C_MspDeInit(I2C_HandleTypeDef* i2cHandle)
   if(i2cHandle->Instance==I2C1)
   {
   /* USER CODE BEGIN I2C1_MspDeInit 0 */
+  /* HAL_I2C_MspDeInit : inverse de HAL_I2C_MspInit (horloge, broches, DMA,
+   * interruptions). Utilisee par le deblocage du bus dans ssd1306.c pour
+   * reprendre SCL / SDA en GPIO. */
 
   /* USER CODE END I2C1_MspDeInit 0 */
     /* Peripheral clock disable */

@@ -22,10 +22,20 @@ static const Theme_t s_light =
 const Theme_t   *T    = &s_dark;
 static ThemeId_t s_id = THEME_DARK;
 
+/**
+ * @brief  Selectionne le theme de couleurs et met a jour le pointeur global T
+ *         (valeur inconnue -> theme sombre). Ce qui est deja affiche ne change
+ *         pas : redessiner l'ecran ensuite.
+ * @param  id  THEME_DARK ou THEME_LIGHT.
+ */
 void THEME_Set(ThemeId_t id)
 {
   s_id = (id == THEME_LIGHT) ? THEME_LIGHT : THEME_DARK;
   T = (s_id == THEME_LIGHT) ? &s_light : &s_dark;
 }
 
+/**
+ * @brief  Theme courant.
+ * @retval THEME_DARK ou THEME_LIGHT.
+ */
 ThemeId_t THEME_Get(void) { return s_id; }

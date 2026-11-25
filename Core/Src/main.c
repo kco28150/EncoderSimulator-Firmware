@@ -57,6 +57,11 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
+/* SystemClock_Config : horloge systeme 100 MHz depuis le HSI (16 MHz) :
+ * PLL M = 8, N = 100, P = 2 -> SYSCLK = HCLK = 100 MHz ; APB1 = 50 MHz
+ * (horloge TIM2 = 100 MHz car APB1 est divise), APB2 = 100 MHz,
+ * 3 cycles d'attente flash. Une erreur de configuration appelle
+ * Error_Handler(). */
 
 /* USER CODE END PFP */
 
@@ -73,6 +78,10 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+  /* main : point d'entree. Initialise la HAL, l'horloge et les peripheriques
+   * generes par CubeMX, puis les modules applicatifs (codeur, IHM, terminal)
+   * et execute la boucle principale cooperative : CMD_Process() (commandes
+   * serie) et UI_Task() (ecrans, tactile, sauvegarde). Ne retourne jamais. */
 
   /* USER CODE END 1 */
 
@@ -176,6 +185,9 @@ void SystemClock_Config(void)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
+  /* Error_Handler : appelee en cas d'echec d'une initialisation HAL.
+   * Masque les interruptions et bloque le programme (point d'arret utile
+   * en debug). */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
   while (1)
@@ -194,6 +206,8 @@ void Error_Handler(void)
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
+  /* assert_failed : appelee par assert_param() si USE_FULL_ASSERT est defini,
+   * avec le fichier et la ligne du parametre invalide. Vide ici. */
   /* User can add his own implementation to report the file name and line number,
      ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */

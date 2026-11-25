@@ -44,6 +44,13 @@ static const Settings_t s_defaults =
   .tcal_ok = 0, .tcal = {0},
 };
 
+/**
+ * @brief  CRC-32 (polynome reflechi 0xEDB88320, comme zlib), calcule bit a bit
+ *         sans table.
+ * @param  p  Donnees.
+ * @param  n  Nombre d'octets.
+ * @retval CRC calcule.
+ */
 static uint32_t crc32(const uint8_t *p, uint32_t n)
 {
   uint32_t c = 0xFFFFFFFFu;
@@ -55,6 +62,12 @@ static uint32_t crc32(const uint8_t *p, uint32_t n)
   return ~c;
 }
 
+/**
+ * @brief  Verifie que des reglages sont dans leurs plages (evite de charger
+ *         ou d'ecrire des valeurs aberrantes).
+ * @param  s  Reglages a verifier.
+ * @retval true si toutes les valeurs sont plausibles.
+ */
 static bool valid(const Settings_t *s)
 {
   return s->ppcm >= (float)ENC_PPCM_MIN && s->ppcm <= (float)ENC_PPCM_MAX &&
@@ -63,6 +76,12 @@ static bool valid(const Settings_t *s)
          s->va_depth_m > 0.0f && s->va_depth_m < 100000.0f && s->theme <= 1u && s->tcal_ok <= 1u;
 }
 
+/**
+ * @brief  Indique si un emplacement d'enregistrement est vierge (64 octets a
+ *         0xFF).
+ * @param  off  Offset de l'emplacement dans le secteur.
+ * @retval true si l'emplacement n'a jamais ete programme.
+ */
 static bool slot_erased(uint32_t off)
 {
   const uint32_t *w = (const uint32_t *)(SET_ADDR + off);
@@ -70,6 +89,14 @@ static bool slot_erased(uint32_t off)
   return true;
 }
 
+/**
+ * @brief  Charge les reglages depuis la flash (secteur 7 utilise comme journal
+ *         circulaire) : retient le dernier enregistrement valide (magic, CRC et
+ *         plages), calcule le prochain emplacement libre, et prend les valeurs
+ *         par defaut si aucun enregistrement n'est valide. Un enregistrement
+ *         invalide (ancien format, corruption) fera effacer le secteur avant la
+ *         prochaine ecriture.
+ */
 void SETTINGS_Load(void)
 {
   const Rec_t *best = 0;
@@ -95,6 +122,12 @@ void SETTINGS_Load(void)
   s_saved = g_set;
 }
 
+/**
+ * @brief  Ecrit g_set dans le prochain emplacement libre, avec un numero de
+ *         sequence et un CRC. Efface d'abord le secteur s'il est plein ou
+ *         contient des donnees invalides. Le CPU est bloque pendant
+ *         l'effacement / la programmation : n'appeler que codeur a l'arret.
+ */
 static void write_record(void)
 {
   Rec_t r;
@@ -131,6 +164,12 @@ static void write_record(void)
   s_saved = g_set;
 }
 
+/**
+ * @brief  Compare deux jeux de reglages champ par champ (pas de memcmp global
+ *         a cause des octets de bourrage de la structure).
+ * @param  a, b  Reglages a comparer.
+ * @retval true si identiques.
+ */
 static bool same(const Settings_t *a, const Settings_t *b)
 {
   return a->ppcm == b->ppcm && a->va_speed_mh == b->va_speed_mh &&
@@ -139,6 +178,13 @@ static bool same(const Settings_t *a, const Settings_t *b)
          memcmp(a->tcal, b->tcal, sizeof a->tcal) == 0;
 }
 
+/**
+ * @brief  Sauvegarde differee, a appeler regulierement (via UI_Task) :
+ *         recopie le PPCM courant dans g_set (suit aussi la commande PPCM) et,
+ *         si g_set differe de la derniere sauvegarde, l'ecrit en flash au plus
+ *         tot SAVE_DELAY_MS apres la premiere modification non sauvegardee,
+ *         uniquement si les valeurs sont valides et le codeur a l'arret.
+ */
 void SETTINGS_Task(void)
 {
   g_set.ppcm = (float)ENC_GetPulsesPerCm();                  /* suit aussi la commande PPCM */

@@ -23,11 +23,21 @@ static uint16_t s_h = TFT_HEIGHT;
 static uint8_t  s_buf[TFT_CHAR_W(4) * TFT_CHAR_H(4) * 2];   /* 1 caractere x4 = 1536 o */
 
 /* -------------------------------------------------------------------------- */
+/**
+ * @brief  Envoie des octets sur SPI2 (bloquant, timeout 50 ms).
+ * @param  d  Donnees.
+ * @param  n  Nombre d'octets.
+ */
 static void spi_tx(const uint8_t *d, uint16_t n)
 {
   HAL_SPI_Transmit(&hspi2, (uint8_t *)d, n, 50);
 }
 
+/**
+ * @brief  Envoie un octet de commande (DC bas) puis repasse DC en donnees.
+ *         CS doit etre bas.
+ * @param  c  Code de commande ILI9341.
+ */
 static void wr_cmd(uint8_t c)                 /* CS doit etre bas */
 {
   DC_CMD();
@@ -35,7 +45,12 @@ static void wr_cmd(uint8_t c)                 /* CS doit etre bas */
   DC_DATA();
 }
 
-/* Commande + parametres dans une transaction CS */
+/**
+ * @brief  Envoie une commande et ses parametres dans une transaction CS.
+ * @param  c  Code de commande ILI9341.
+ * @param  p  Parametres (ignore si n = 0).
+ * @param  n  Nombre de parametres.
+ */
 static void cmd_params(uint8_t c, const uint8_t *p, uint8_t n)
 {
   CS_LOW();
@@ -44,7 +59,13 @@ static void cmd_params(uint8_t c, const uint8_t *p, uint8_t n)
   CS_HIGH();
 }
 
-/* Fenetre d'ecriture ; laisse CS bas et DC en donnees, pret pour les pixels */
+/**
+ * @brief  Definit la fenetre d'ecriture (CASET 0x2A, RASET 0x2B) puis lance
+ *         l'ecriture memoire (RAMWR 0x2C). Laisse CS bas et DC en donnees,
+ *         pret pour les pixels ; l'appelant remonte CS a la fin.
+ * @param  x1, y1  Coin haut gauche (inclus).
+ * @param  x2, y2  Coin bas droit (inclus).
+ */
 static void set_window(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2)
 {
   uint8_t ca[4] = { (uint8_t)(x1 >> 8), (uint8_t)x1, (uint8_t)(x2 >> 8), (uint8_t)x2 };
@@ -56,6 +77,11 @@ static void set_window(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2)
 }
 
 /* -------------------------------------------------------------------------- */
+/**
+ * @brief  Initialise l'ecran ILI9341 : reset materiel puis logiciel, sequence
+ *         de configuration (reprise de TFTpp, format RGB565), sortie de veille,
+ *         allumage et orientation paysage. Bloquant (~0,4 s de delais).
+ */
 void TFT_Init(void)
 {
   /* Reset materiel (RST bas puis haut) */
@@ -99,6 +125,11 @@ void TFT_Init(void)
   TFT_SetRotation(SCREEN_HORIZONTAL_1);
 }
 
+/**
+ * @brief  Change l'orientation (registre MADCTL, ordre des couleurs BGR) et
+ *         met a jour la largeur / hauteur logiques.
+ * @param  rotation  SCREEN_VERTICAL_1/2 ou SCREEN_HORIZONTAL_1/2.
+ */
 void TFT_SetRotation(uint8_t rotation)
 {
   uint8_t madctl;
@@ -113,6 +144,13 @@ void TFT_SetRotation(uint8_t rotation)
   cmd_params(0x36, &madctl, 1);
 }
 
+/**
+ * @brief  Remplit un rectangle d'une couleur, avec decoupage aux bords de
+ *         l'ecran. Les pixels sont envoyes par rafales de BURST_PIXELS.
+ * @param  x, y   Coin haut gauche (px).
+ * @param  w, h   Taille (px).
+ * @param  color  Couleur RGB565.
+ */
 void TFT_FillRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color)
 {
   if (x >= s_w || y >= s_h || w == 0u || h == 0u) return;
@@ -137,9 +175,30 @@ void TFT_FillRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color
   CS_HIGH();
 }
 
+/**
+ * @brief  Remplit tout l'ecran d'une couleur.
+ * @param  color  Couleur RGB565.
+ */
 void TFT_FillScreen(uint16_t color)            { TFT_FillRect(0, 0, s_w, s_h, color); }
+/**
+ * @brief  Trace une ligne horizontale de 1 px.
+ * @param  x, y   Point de depart (px).
+ * @param  w      Longueur (px).
+ * @param  color  Couleur RGB565.
+ */
 void TFT_HLine(uint16_t x, uint16_t y, uint16_t w, uint16_t color) { TFT_FillRect(x, y, w, 1, color); }
 
+/**
+ * @brief  Affiche un caractere de la police 5x7 dans une cellule de
+ *         6 x 8 px x scale, fond compris, en une seule rafale SPI. Un caractere
+ *         hors police est remplace par '?' ; rien n'est dessine si la cellule
+ *         deborde de l'ecran.
+ * @param  x, y   Coin haut gauche (px).
+ * @param  c      Caractere.
+ * @param  fg     Couleur du texte.
+ * @param  bg     Couleur du fond.
+ * @param  scale  Facteur d'agrandissement (1..4).
+ */
 void TFT_DrawChar(uint16_t x, uint16_t y, char c, uint16_t fg, uint16_t bg, uint8_t scale)
 {
   if (scale < 1u) scale = 1u;
@@ -168,6 +227,14 @@ void TFT_DrawChar(uint16_t x, uint16_t y, char c, uint16_t fg, uint16_t bg, uint
   CS_HIGH();
 }
 
+/**
+ * @brief  Affiche une chaine sur une ligne (pas de retour a la ligne).
+ * @param  x, y   Coin haut gauche (px).
+ * @param  s      Chaine.
+ * @param  fg     Couleur du texte.
+ * @param  bg     Couleur du fond.
+ * @param  scale  Facteur d'agrandissement (1..4).
+ */
 void TFT_DrawString(uint16_t x, uint16_t y, const char *s, uint16_t fg, uint16_t bg, uint8_t scale)
 {
   while (*s)
@@ -177,7 +244,13 @@ void TFT_DrawString(uint16_t x, uint16_t y, const char *s, uint16_t fg, uint16_t
   }
 }
 
-/* Melange lineaire RGB565 : t = 0 -> bg, t = 15 -> fg */
+/**
+ * @brief  Melange lineaire de deux couleurs RGB565.
+ * @param  fg  Couleur de premier plan.
+ * @param  bg  Couleur de fond.
+ * @param  t   Coefficient 0..15 : 0 -> bg, 15 -> fg.
+ * @retval Couleur melangee.
+ */
 static uint16_t blend565(uint16_t fg, uint16_t bg, uint8_t t)
 {
   uint16_t r = (uint16_t)((((fg >> 11) & 31u) * t + ((bg >> 11) & 31u) * (15u - t) + 7u) / 15u);
@@ -186,6 +259,17 @@ static uint16_t blend565(uint16_t fg, uint16_t bg, uint8_t t)
   return (uint16_t)((r << 11) | (g << 5) | b);
 }
 
+/**
+ * @brief  Affiche une image d'opacite 4 bits par pixel (2 pixels par octet,
+ *         poids fort a gauche), coloree par melange entre bg et fg via une
+ *         palette de 16 teintes. Une ligne doit tenir dans le tampon s_buf
+ *         (w x 2 octets) ; l'image doit tenir dans l'ecran.
+ * @param  x, y  Coin haut gauche (px).
+ * @param  w, h  Taille de l'image (px).
+ * @param  a4    Donnees (lignes de (w + 1) / 2 octets).
+ * @param  fg    Couleur pour l'opacite maximale.
+ * @param  bg    Couleur du fond.
+ */
 void TFT_DrawAlpha4(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                     const uint8_t *a4, uint16_t fg, uint16_t bg)
 {

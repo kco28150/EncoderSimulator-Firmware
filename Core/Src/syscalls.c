@@ -40,16 +40,26 @@ char *__env[1] = { 0 };
 char **environ = __env;
 
 
-/* Functions */
+/**
+ * @brief  Initialisation du semihosting : inutilisee ici (vide).
+ */
 void initialise_monitor_handles()
 {
 }
 
+/**
+ * @brief  Appel systeme newlib : identifiant du processus (fixe, pas d'OS).
+ * @retval 1.
+ */
 int _getpid(void)
 {
   return 1;
 }
 
+/**
+ * @brief  Appel systeme newlib : envoi d'un signal, non supporte.
+ * @retval -1 (errno = EINVAL).
+ */
 int _kill(int pid, int sig)
 {
   (void)pid;
@@ -58,12 +68,21 @@ int _kill(int pid, int sig)
   return -1;
 }
 
+/**
+ * @brief  Appel systeme newlib : fin du programme ; bloque indefiniment.
+ * @param  status  Code de sortie.
+ */
 void _exit (int status)
 {
   _kill(status, -1);
   while (1) {}    /* Make sure we hang here */
 }
 
+/**
+ * @brief  Appel systeme newlib : lecture (stdin) via __io_getchar().
+ *         Faible : redefinissable par l'application. Non utilise ici.
+ * @retval Nombre d'octets lus (= len).
+ */
 __attribute__((weak)) int _read(int file, char *ptr, int len)
 {
   (void)file;
@@ -77,6 +96,12 @@ __attribute__((weak)) int _read(int file, char *ptr, int len)
   return len;
 }
 
+/**
+ * @brief  Appel systeme newlib : ecriture (stdout / printf) via
+ *         __io_putchar(). Faible : redefinissable par l'application. Non
+ *         utilise ici (le terminal passe par cmd_parser.c).
+ * @retval Nombre d'octets ecrits (= len).
+ */
 __attribute__((weak)) int _write(int file, char *ptr, int len)
 {
   (void)file;
@@ -89,6 +114,10 @@ __attribute__((weak)) int _write(int file, char *ptr, int len)
   return len;
 }
 
+/**
+ * @brief  Appel systeme newlib : fermeture de fichier, non supportee.
+ * @retval -1.
+ */
 int _close(int file)
 {
   (void)file;
@@ -96,6 +125,11 @@ int _close(int file)
 }
 
 
+/**
+ * @brief  Appel systeme newlib : etat d'un fichier, toujours "peripherique
+ *         caractere".
+ * @retval 0.
+ */
 int _fstat(int file, struct stat *st)
 {
   (void)file;
@@ -103,12 +137,20 @@ int _fstat(int file, struct stat *st)
   return 0;
 }
 
+/**
+ * @brief  Appel systeme newlib : tout fichier est considere comme un terminal.
+ * @retval 1.
+ */
 int _isatty(int file)
 {
   (void)file;
   return 1;
 }
 
+/**
+ * @brief  Appel systeme newlib : deplacement dans un fichier, sans effet.
+ * @retval 0.
+ */
 int _lseek(int file, int ptr, int dir)
 {
   (void)file;
@@ -117,6 +159,10 @@ int _lseek(int file, int ptr, int dir)
   return 0;
 }
 
+/**
+ * @brief  Appel systeme newlib : ouverture de fichier, non supportee.
+ * @retval -1.
+ */
 int _open(char *path, int flags, ...)
 {
   (void)path;
@@ -125,6 +171,10 @@ int _open(char *path, int flags, ...)
   return -1;
 }
 
+/**
+ * @brief  Appel systeme newlib : attente d'un processus fils, non supportee.
+ * @retval -1 (errno = ECHILD).
+ */
 int _wait(int *status)
 {
   (void)status;
@@ -132,6 +182,10 @@ int _wait(int *status)
   return -1;
 }
 
+/**
+ * @brief  Appel systeme newlib : suppression de fichier, non supportee.
+ * @retval -1 (errno = ENOENT).
+ */
 int _unlink(char *name)
 {
   (void)name;
@@ -139,12 +193,21 @@ int _unlink(char *name)
   return -1;
 }
 
+/**
+ * @brief  Appel systeme newlib : temps processus, non supporte.
+ * @retval -1.
+ */
 int _times(struct tms *buf)
 {
   (void)buf;
   return -1;
 }
 
+/**
+ * @brief  Appel systeme newlib : etat d'un fichier par son nom, toujours
+ *         "peripherique caractere".
+ * @retval 0.
+ */
 int _stat(char *file, struct stat *st)
 {
   (void)file;
@@ -152,6 +215,10 @@ int _stat(char *file, struct stat *st)
   return 0;
 }
 
+/**
+ * @brief  Appel systeme newlib : creation de lien, non supportee.
+ * @retval -1 (errno = EMLINK).
+ */
 int _link(char *old, char *new)
 {
   (void)old;
@@ -160,12 +227,20 @@ int _link(char *old, char *new)
   return -1;
 }
 
+/**
+ * @brief  Appel systeme newlib : creation de processus, non supportee.
+ * @retval -1 (errno = EAGAIN).
+ */
 int _fork(void)
 {
   errno = EAGAIN;
   return -1;
 }
 
+/**
+ * @brief  Appel systeme newlib : execution d'un programme, non supportee.
+ * @retval -1 (errno = ENOMEM).
+ */
 int _execve(char *name, char **argv, char **env)
 {
   (void)name;

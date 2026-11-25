@@ -36,6 +36,14 @@ static double     s_min, s_max;
 static uint8_t    s_dec;
 static KP_Done_t  s_cb;
 
+/**
+ * @brief  Formate une valeur avec 'dec' decimales sans %f (newlib-nano), puis
+ *         retire les zeros inutiles : 300.00 -> 300 ; 2.50 -> 2.5.
+ * @param  b    Tampon de sortie.
+ * @param  sz   Taille du tampon.
+ * @param  v    Valeur.
+ * @param  dec  Nombre de decimales.
+ */
 static void fmt_val(char *b, size_t sz, double v, uint8_t dec)
 {
   /* format sans %f (newlib-nano) */
@@ -56,6 +64,12 @@ static void fmt_val(char *b, size_t sz, double v, uint8_t dec)
   }
 }
 
+/**
+ * @brief  Analyse la saisie du pave (chiffres et au plus un point decimal).
+ * @param  s   Chaine saisie.
+ * @param  ok  Recoit true si la chaine contient un nombre valide.
+ * @retval Valeur lue (0 si invalide).
+ */
 static double parse(const char *s, bool *ok)
 {
   double v = 0, sc = 1; bool frac = false, dig = false;
@@ -70,6 +84,11 @@ static double parse(const char *s, bool *ok)
   return v;
 }
 
+/**
+ * @brief  Redessine l'afficheur du pave : valeur saisie (ou "0") avec l'unite,
+ *         cadre rouge en cas d'erreur, mention "actuel" tant que la valeur
+ *         initiale n'a pas ete modifiee.
+ */
 static void draw_display(void)
 {
   uint16_t bg = T->card;
@@ -78,6 +97,10 @@ static void draw_display(void)
   if (s_fresh) GUI_Text((uint16_t)(s_disp.x + 6), (uint16_t)(s_disp.y + 4), "actuel", T->muted, bg, 1);
 }
 
+/**
+ * @brief  Redessine le bandeau du pave : titre a gauche, plage autorisee a
+ *         droite (en rouge apres une saisie hors plage).
+ */
 static void draw_header(void)
 {
   char a[16], b[16], r[40];
@@ -90,6 +113,17 @@ static void draw_header(void)
   GUI_Text((uint16_t)(TFT_WIDTH - 6 - GUI_TextW(r, 1)), 8, r, s_err ? T->danger : T->muted, T->card, 1);
 }
 
+/**
+ * @brief  Ouvre le pave numerique. L'appelant doit ensuite le dessiner avec
+ *         KP_Draw().
+ * @param  title     Titre affiche dans le bandeau.
+ * @param  unit      Unite affichee a cote de la valeur.
+ * @param  value     Valeur initiale (remplacee par la premiere touche).
+ * @param  vmin      Valeur minimale acceptee.
+ * @param  vmax      Valeur maximale acceptee.
+ * @param  decimals  Nombre maximal de decimales saisissables.
+ * @param  on_ok     Fonction appelee avec la valeur validee (dans la plage).
+ */
 void KP_Open(const char *title, const char *unit, double value,
              double vmin, double vmax, uint8_t decimals, KP_Done_t on_ok)
 {
@@ -98,14 +132,26 @@ void KP_Open(const char *title, const char *unit, double value,
   s_fresh = true; s_err = false; s_active = true;
 }
 
+/**
+ * @brief  Indique si le pave numerique est ouvert.
+ * @retval true si le pave est ouvert.
+ */
 bool KP_Active(void) { return s_active; }
 
+/**
+ * @brief  Dessine une touche (OK en couleur d'accent, ESC en couleur danger).
+ * @param  k        Index de la touche (K_xxx).
+ * @param  pressed  true pour l'etat enfonce.
+ */
 void KP_DrawKey(int k, bool pressed)
 {
   GStyle_t st = (k == K_OK) ? GST_ACCENT : (k == K_ESC) ? GST_DANGER : GST_NORMAL;
   GUI_Button(&s_keys[k], s_lbl[k], 2, st, GIC_NONE, pressed);
 }
 
+/**
+ * @brief  Dessin complet du pave : fond, bandeau, afficheur et touches.
+ */
 void KP_Draw(void)
 {
   TFT_FillScreen(T->bg);
@@ -114,12 +160,29 @@ void KP_Draw(void)
   for (int k = 0; k < K_N; k++) KP_DrawKey(k, false);
 }
 
+/**
+ * @brief  Touche situee sous un point.
+ * @param  x, y  Position en pixels.
+ * @retval Index de la touche, ou -1 si aucune.
+ */
 int KP_Hit(uint16_t x, uint16_t y)
 {
   for (int k = 0; k < K_N; k++) if (GUI_Hit(&s_keys[k], x, y)) return k;
   return -1;
 }
 
+/**
+ * @brief  Traite l'appui sur une touche :
+ *         - chiffres : la premiere touche remplace la valeur initiale ; nombre
+ *           de decimales limite, pas de 0 en tete ;
+ *         - '.', <- (efface un caractere), C (efface tout) ;
+ *         - ESC : ferme sans valider ;
+ *         - OK : verifie la plage, appelle le callback et ferme ; sinon affiche
+ *           l'erreur.
+ * @param  k  Index de la touche (K_xxx).
+ * @retval true si le pave reste ouvert ; false s'il vient d'etre ferme (OK
+ *         valide ou ESC) : l'appelant doit alors redessiner son ecran.
+ */
 bool KP_Key(int k)
 {
   size_t L = strlen(s_buf);

@@ -47,6 +47,13 @@ static volatile uint32_t   s_prof_left;         /* etats restants dans le segmen
 static double              s_ppcm      = ENC_DEFAULT_PPCM;
 
 /* -------------------------------------------------------------------------- */
+/**
+ * @brief  Convertit une frequence d'impulsions en periode de TIM2 :
+ *         ticks = horloge TIM2 / (4 x hz), car chaque impulsion compte 4 etats.
+ *         Arrondi au plus proche, borne a [2, 2^32 - 1].
+ * @param  hz  Frequence en Hz (> 0).
+ * @retval Periode en cycles d'horloge TIM2 (= ARR + 1).
+ */
 static uint32_t hz_to_ticks(double hz)
 {
   double t = (double)s_timclk / (4.0 * hz) + 0.5;
@@ -55,11 +62,22 @@ static uint32_t hz_to_ticks(double hz)
   return (uint32_t)t;
 }
 
+/**
+ * @brief  Verifie que ENC_FMIN_HZ <= hz <= Fmax (tolerance relative 1e-9 sur
+ *         Fmax pour absorber les arrondis de conversion m/h -> Hz).
+ * @param  hz  Frequence en Hz.
+ * @retval true si la frequence est utilisable.
+ */
 static bool hz_valid(double hz)
 {
   return (hz >= ENC_FMIN_HZ) && (hz <= ENC_GetFmaxHz() * (1.0 + 1e-9));
 }
 
+/**
+ * @brief  Arrete TIM2, masque son interruption de mise a jour et efface tout
+ *         drapeau / interruption en attente. Les sorties A/B restent figees
+ *         dans leur etat courant.
+ */
 static void timer_halt(void)
 {
   TIM2->CR1  &= ~TIM_CR1_CEN;
@@ -68,6 +86,12 @@ static void timer_halt(void)
   NVIC_ClearPendingIRQ(TIM2_IRQn);
 }
 
+/**
+ * @brief  (Re)demarre TIM2 avec une periode de 'ticks' cycles et active son
+ *         interruption de mise a jour. URS evite que la generation de l'UG
+ *         (chargement des registres ARR / PSC) declenche une interruption.
+ * @param  ticks  Periode en cycles d'horloge TIM2 (>= 2).
+ */
 static void timer_start(uint32_t ticks)
 {
   timer_halt();
@@ -82,6 +106,12 @@ static void timer_start(uint32_t ticks)
 }
 
 /* -------------------------------------------------------------------------- */
+/**
+ * @brief  Initialise le simulateur : calcule l'horloge de TIM2 (PCLK1, x2 si
+ *         le prescaler APB1 est different de 1), arrete le timer, met les
+ *         sorties a A = B = 0 et passe en mode IDLE.
+ *         A appeler apres MX_GPIO_Init() et MX_TIM2_Init().
+ */
 void ENC_Init(void)
 {
   /* Horloge TIM2 = PCLK1, x2 si le prescaler APB1 est different de 1 */
@@ -94,6 +124,15 @@ void ENC_Init(void)
   s_mode = ENC_IDLE;
 }
 
+/**
+ * @brief  Lance un deplacement de 'pulses' impulsions a frequence constante.
+ *         La fin est signalee par ENC_TakeDone().
+ * @param  pulses  Nombre d'impulsions signe (signe = sens), non nul,
+ *                 |pulses| <= ENC_MAX_PULSES.
+ * @param  hz      Frequence en Hz (ENC_FMIN_HZ..Fmax).
+ * @retval ENC_OK, ENC_ERR_BUSY (mouvement en cours), ENC_ERR_COUNT ou
+ *         ENC_ERR_FREQ.
+ */
 ENC_Status_t ENC_Move(int32_t pulses, double hz)
 {
   if (s_mode != ENC_IDLE)                          return ENC_ERR_BUSY;
@@ -112,6 +151,11 @@ ENC_Status_t ENC_Move(int32_t pulses, double hz)
   return ENC_OK;
 }
 
+/**
+ * @brief  Lance un defilement continu, jusqu'a ENC_Stop().
+ * @param  hz_signed  Frequence en Hz ; le signe donne le sens.
+ * @retval ENC_OK, ENC_ERR_BUSY ou ENC_ERR_FREQ.
+ */
 ENC_Status_t ENC_Run(double hz_signed)
 {
   double hz = (hz_signed < 0.0) ? -hz_signed : hz_signed;
@@ -129,6 +173,13 @@ ENC_Status_t ENC_Run(double hz_signed)
   return ENC_OK;
 }
 
+/**
+ * @brief  Change la frequence du mouvement en cours (MOVE ou RUN). Grace au
+ *         preload de ARR, la nouvelle periode s'applique a la fin de l'etat en
+ *         cours, sans glitch. Refuse pendant un scenario (profil impose).
+ * @param  hz  Nouvelle frequence en Hz.
+ * @retval ENC_OK, ENC_ERR_NOT_RUNNING, ENC_ERR_PROFILE ou ENC_ERR_FREQ.
+ */
 ENC_Status_t ENC_SetSpeed(double hz)
 {
   if (s_mode == ENC_IDLE) return ENC_ERR_NOT_RUNNING;
@@ -140,6 +191,17 @@ ENC_Status_t ENC_SetSpeed(double hz)
   return ENC_OK;
 }
 
+/**
+ * @brief  Lance un deplacement a vitesse variable, decoupe en segments :
+ *         le segment i dure seg_states[i] etats a la periode seg_ticks[i].
+ *         Les tableaux ne sont pas copies : ils doivent rester valides jusqu'a
+ *         la fin du mouvement.
+ * @param  dir         Sens (+1 ou -1).
+ * @param  seg_ticks   Periode TIM2 de chaque segment (>= 2).
+ * @param  seg_states  Nombre d'etats de chaque segment (> 0).
+ * @param  nseg        Nombre de segments (> 0).
+ * @retval ENC_OK, ENC_ERR_BUSY ou ENC_ERR_COUNT.
+ */
 ENC_Status_t ENC_MoveProfile(int8_t dir, const uint32_t *seg_ticks,
                              const uint32_t *seg_states, uint16_t nseg)
 {
@@ -170,10 +232,29 @@ ENC_Status_t ENC_MoveProfile(int8_t dir, const uint32_t *seg_ticks,
   return ENC_OK;
 }
 
+/**
+ * @brief  Indique si un mouvement par profil (scenario) est en cours.
+ * @retval true pendant un ENC_MoveProfile() non termine.
+ */
 bool     ENC_IsProfile(void)        { return s_prof && (s_mode != ENC_IDLE); }
+/**
+ * @brief  Version publique de hz_to_ticks() (utilisee par scenario.c).
+ * @param  hz  Frequence en Hz.
+ * @retval Periode en cycles d'horloge TIM2.
+ */
 uint32_t ENC_HzToTicks(double hz)   { return hz_to_ticks(hz); }
+/**
+ * @brief  Version publique de hz_valid() (utilisee par scenario.c).
+ * @param  hz  Frequence en Hz.
+ * @retval true si la frequence est dans la plage autorisee.
+ */
 bool     ENC_HzValid(double hz)     { return hz_valid(hz); }
 
+/**
+ * @brief  Arret immediat : le timer est stoppe, les sorties restent figees
+ *         dans l'etat courant et la position est conservee. Ne leve pas le
+ *         drapeau de fin (pas de "DONE").
+ */
 void ENC_Stop(void)
 {
   timer_halt();               /* sorties figees dans l'etat courant */
@@ -182,6 +263,10 @@ void ENC_Stop(void)
   s_prof      = false;
 }
 
+/**
+ * @brief  Remet la position a 0. Section critique car s_pos est modifiee
+ *         dans l'interruption TIM2.
+ */
 void ENC_Zero(void)
 {
   __disable_irq();
@@ -189,6 +274,11 @@ void ENC_Zero(void)
   __enable_irq();
 }
 
+/**
+ * @brief  Change la resolution du codeur simule, uniquement a l'arret.
+ * @param  ppcm  Impulsions par cm (ENC_PPCM_MIN..ENC_PPCM_MAX).
+ * @retval ENC_OK, ENC_ERR_BUSY ou ENC_ERR_PPCM.
+ */
 ENC_Status_t ENC_SetPulsesPerCm(double ppcm)
 {
   if (s_mode != ENC_IDLE)                          return ENC_ERR_BUSY;
@@ -197,23 +287,71 @@ ENC_Status_t ENC_SetPulsesPerCm(double ppcm)
   return ENC_OK;
 }
 
+/**
+ * @brief  Resolution courante.
+ * @retval Impulsions par cm.
+ */
 double ENC_GetPulsesPerCm(void)  { return s_ppcm; }
+/**
+ * @brief  Frequence maximale : ENC_VMAX_MH convertie en Hz avec la resolution
+ *         courante (1 m/h = ppcm x 100 / 3600 = ppcm / 36 Hz).
+ * @retval Frequence maximale en Hz.
+ */
 double ENC_GetFmaxHz(void)       { return ENC_VMAX_MH * s_ppcm / 36.0; }
+/**
+ * @brief  Convertit une vitesse en frequence : hz = mh x ppcm / 36.
+ * @param  mh  Vitesse en m/h.
+ * @retval Frequence en Hz.
+ */
 double ENC_MhToHz(double mh)     { return mh * s_ppcm / 36.0; }
+/**
+ * @brief  Convertit une frequence en vitesse : mh = hz x 36 / ppcm.
+ * @param  hz  Frequence en Hz.
+ * @retval Vitesse en m/h.
+ */
 double ENC_HzToMh(double hz)     { return hz * 36.0 / s_ppcm; }
 
+/**
+ * @brief  Mode courant.
+ * @retval ENC_IDLE, ENC_MOVE ou ENC_RUN.
+ */
 ENC_Mode_t ENC_GetMode(void)             { return s_mode; }
+/**
+ * @brief  Sens logique du dernier mouvement lance.
+ * @retval +1 ou -1.
+ */
 int8_t     ENC_GetDir(void)              { return s_dir; }
+/**
+ * @brief  Position courante.
+ * @retval Position signee en etats de Gray (4 etats par impulsion).
+ */
 int32_t    ENC_GetStates(void)           { return s_pos; }
+/**
+ * @brief  Etats restant a produire pour le MOVE en cours.
+ * @retval Nombre d'etats (0 en RUN ou a l'arret).
+ */
 uint32_t   ENC_GetRemainingStates(void)  { return s_remaining; }
+/**
+ * @brief  Nombre total d'etats du dernier MOVE (pour la progression).
+ * @retval Nombre d'etats.
+ */
 uint32_t   ENC_GetTotalStates(void)      { return s_total; }
 
+/**
+ * @brief  Frequence courante, recalculee depuis la periode du timer.
+ * @retval Frequence en Hz, 0 a l'arret.
+ */
 double ENC_GetHz(void)
 {
   if (s_mode == ENC_IDLE || s_ticks == 0u) return 0.0;
   return (double)s_timclk / (4.0 * (double)s_ticks);
 }
 
+/**
+ * @brief  Lit et efface, de facon atomique, le drapeau de fin de MOVE.
+ * @retval true une seule fois apres chaque MOVE (ou scenario) termine
+ *         normalement.
+ */
 bool ENC_TakeDone(void)
 {
   bool d;
@@ -225,7 +363,15 @@ bool ENC_TakeDone(void)
 }
 
 /* -------------------------------------------------------------------------- */
-/* Appelee a chaque debordement de TIM2 (4*f par seconde). Pas de float ici.   */
+/**
+ * @brief  Appelee a chaque debordement de TIM2 (4 x f fois par seconde), depuis
+ *         TIM2_IRQHandler. Pas de calcul flottant ici.
+ *         Avance d'une phase de Gray dans le sens courant (inverse si
+ *         ENC_DIR_INVERT), ecrit A et B en une seule ecriture BSRR et met a jour
+ *         la position. En MOVE : decremente le reste, arrete le timer et leve
+ *         le drapeau de fin a 0 ; en profil, charge la periode du segment
+ *         suivant (preload ARR).
+ */
 void ENC_TimerIRQ(void)
 {
   if ((TIM2->SR & TIM_SR_UIF) == 0u) return;

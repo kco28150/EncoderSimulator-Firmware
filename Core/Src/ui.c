@@ -244,9 +244,15 @@ static void cal_start(void);
 /* ========================================================================== */
 /* Utilitaires                                                                */
 /* ========================================================================== */
-/* Formate v avec 'dec' decimales (0..3), arrondi au plus proche.
- * newlib-nano n'a pas %f par defaut : on passe par des entiers.
- * Ex. fmt_fix(b, n, -1.2345, 2) -> "-1.23" ; ne produit jamais "-0.00". */
+/**
+ * @brief  Formate v avec 'dec' decimales (0..3), arrondi au plus proche.
+ *         newlib-nano n'a pas %f par defaut : on passe par des entiers.
+ *         Ex. fmt_fix(b, n, -1.2345, 2) -> "-1.23" ; ne produit jamais "-0.00".
+ * @param  b    Tampon de sortie.
+ * @param  sz   Taille du tampon.
+ * @param  v    Valeur.
+ * @param  dec  Nombre de decimales (0..3).
+ */
 static void fmt_fix(char *b, size_t sz, double v, unsigned dec)
 {
   static const uint32_t p10[] = {1u, 10u, 100u, 1000u};
@@ -261,7 +267,13 @@ static void fmt_fix(char *b, size_t sz, double v, unsigned dec)
   else                snprintf(b, sz, "%s%lu.%03lu", neg ? "-" : "", (unsigned long)ip, (unsigned long)fp);
 }
 
-/* Valeur sans zeros inutiles (300, 2.5, 0.125) */
+/**
+ * @brief  Formate une valeur sans zeros inutiles (300, 2.5, 0.125).
+ * @param  b    Tampon de sortie.
+ * @param  sz   Taille du tampon.
+ * @param  v    Valeur.
+ * @param  dec  Nombre maximal de decimales (0..3).
+ */
 static void fmt_trim(char *b, size_t sz, double v, unsigned dec)
 {
   fmt_fix(b, sz, v, dec);
@@ -273,18 +285,32 @@ static void fmt_trim(char *b, size_t sz, double v, unsigned dec)
   }
 }
 
-/* Aligne a droite sur w caracteres (les chiffres ne "sautent" pas d'un rafraichissement a l'autre) */
+/**
+ * @brief  Aligne un texte a droite sur w caracteres (les chiffres ne
+ *         "sautent" pas d'un rafraichissement a l'autre).
+ * @param  d   Tampon de sortie.
+ * @param  sz  Taille du tampon.
+ * @param  s   Texte.
+ * @param  w   Largeur en caracteres.
+ */
 static void rjust(char *d, size_t sz, const char *s, unsigned w) { snprintf(d, sz, "%*s", (int)w, s); }
 
-/* Profondeur simulee en metres (positive = descente), d'apres la position
- * du codeur en etats de Gray et la resolution courante */
+/**
+ * @brief  Profondeur simulee, d'apres la position du codeur en etats de Gray
+ *         et la resolution courante.
+ * @retval Profondeur en metres (positive = descente).
+ */
 static double depth_m(void)
 {
   return (double)ENC_GetStates() / ENC_STATES_PER_PULSE / ENC_GetPulsesPerCm() / 100.0;
 }
 
-/* Affiche un message pendant MSG_MS a la place du titre de la page.
- * Le "| 1u" garantit s_msg_t != 0 (0 signifie "pas de message"). */
+/**
+ * @brief  Affiche un message pendant MSG_MS a la place du titre de la page.
+ *         Le "| 1u" garantit s_msg_t != 0 (0 signifie "pas de message").
+ * @param  m    Message (tronque a 39 caracteres).
+ * @param  col  Couleur du message.
+ */
 static void ui_msg(const char *m, uint16_t col)
 {
   strncpy(s_msg, m, sizeof s_msg - 1);
@@ -293,7 +319,11 @@ static void ui_msg(const char *m, uint16_t col)
   s_msg_t = HAL_GetTick() | 1u;
 }
 
-/* Traduit un code d'erreur du module codeur en message pour l'utilisateur */
+/**
+ * @brief  Traduit un code d'erreur du module codeur en message pour
+ *         l'utilisateur (barre du haut).
+ * @param  st  Code d'erreur.
+ */
 static void enc_err(ENC_Status_t st)
 {
   switch (st)
@@ -310,9 +340,13 @@ static void enc_err(ENC_Status_t st)
 /* ========================================================================== */
 /* Dessin des boutons                                                         */
 /* ========================================================================== */
-/* Dessine le bouton 'id' a l'etat normal ou enfonce (pressed = retour visuel
- * pendant l'appui). Les champs de saisie affichent la valeur courante :
- * il suffit de redessiner le bouton pour mettre a jour la valeur. */
+/**
+ * @brief  Dessine un bouton a l'etat normal ou enfonce (retour visuel pendant
+ *         l'appui). Les champs de saisie affichent la valeur courante : il
+ *         suffit de redessiner le bouton pour mettre a jour la valeur.
+ * @param  id       Identifiant du bouton (B_xxx).
+ * @param  pressed  true pour l'etat enfonce.
+ */
 static void draw_btn(int id, bool pressed)
 {
   const GRect *r = &s_btn[id].r;
@@ -371,8 +405,12 @@ static void draw_btn(int id, bool pressed)
   }
 }
 
-/* Un bouton est actif s'il appartient a la page courante (ou a toutes) et,
- * pour les lignes de scenario, si le scenario correspondant existe */
+/**
+ * @brief  Un bouton est actif s'il appartient a la page courante (ou a toutes)
+ *         et, pour les lignes de scenario, si le scenario correspondant existe.
+ * @param  id  Identifiant du bouton.
+ * @retval true si le bouton est affiche et cliquable.
+ */
 static bool btn_visible(int id)
 {
   if (s_btn[id].r.w == 0u) return false;
@@ -382,7 +420,11 @@ static bool btn_visible(int id)
   return true;
 }
 
-/* Bouton actif sous le point (x, y) en pixels, ou B_NONE */
+/**
+ * @brief  Bouton actif sous un point.
+ * @param  x, y  Position en pixels.
+ * @retval Identifiant du bouton, ou B_NONE.
+ */
 static int btn_hit(uint16_t x, uint16_t y)
 {
   for (int id = 0; id < B_COUNT; id++)
@@ -393,12 +435,22 @@ static int btn_hit(uint16_t x, uint16_t y)
 /* ========================================================================== */
 /* Graphique : profondeur (m, positive vers le bas) sur 30 s                  */
 /* ========================================================================== */
-/* Partie entiere par defaut (floor) sans libm, correcte aussi pour x < 0 */
+/**
+ * @brief  Partie entiere par defaut (floor) sans libm, correcte aussi pour
+ *         x < 0.
+ * @param  x  Valeur.
+ * @retval Plus grand entier <= x.
+ */
 static long lfloor(double x) { long i = (long)x; return (x < (double)i) ? i - 1 : i; }
 
-/* Echelle "ronde" en 4 divisions (pas 1/2/5 x 10^n) contenant [mn, mx].
- * Etendue minimale 1 cm pour ne pas amplifier le bruit a l'arret.
- * Ex. mn = 0.12, mx = 0.31 -> pas 0.05 -> [0.10 ; 0.30] trop court -> pas 0.1 -> [0.1 ; 0.5] */
+/**
+ * @brief  Echelle "ronde" en 4 divisions (pas 1/2/5 x 10^n) contenant [mn, mx].
+ *         Etendue minimale 1 cm pour ne pas amplifier le bruit a l'arret.
+ *         Ex. mn = 0.12, mx = 0.31 -> pas 0.05 -> [0.10 ; 0.30] trop court
+ *         -> pas 0.1 -> [0.1 ; 0.5].
+ * @param  mn, mx  Profondeurs min / max a afficher (m).
+ * @param  lo, hi  Recoivent les bornes de l'echelle (m).
+ */
 static void graph_scale(double mn, double mx, double *lo, double *hi)
 {
   static const double mult[] = { 1.0, 2.0, 5.0 };
@@ -417,11 +469,20 @@ static void graph_scale(double mn, double mx, double *lo, double *hi)
   *lo = mn; *hi = mn + span;
 }
 
-/* Ordonnee de la ligne de grille j (0 = haut, 4 = bas) */
+/**
+ * @brief  Ordonnee d'une ligne de grille du graphique.
+ * @param  j  Numero de ligne (0 = haut, 4 = bas).
+ * @retval Ordonnee ecran (px).
+ */
 static int16_t grid_y(int j) { return (int16_t)(GY + 1 + (j * (GH - 4) + 2) / 4); }
 
-/* Ordonnee ecran d'une profondeur : profondeur positive vers le bas, donc
- * s_glo (plus faible profondeur) en haut, s_ghi en bas. Bornee a la zone. */
+/**
+ * @brief  Ordonnee ecran d'une profondeur : profondeur positive vers le bas,
+ *         donc s_glo (plus faible profondeur) en haut, s_ghi en bas. Bornee a
+ *         la zone de trace.
+ * @param  d  Profondeur (m).
+ * @retval Ordonnee ecran (px).
+ */
 static int16_t graph_y(double d)
 {
   double t = (d - s_glo) / (s_ghi - s_glo);
@@ -430,15 +491,23 @@ static int16_t graph_y(double d)
   return (int16_t)(GY + 1 + t * (GH - 4));
 }
 
-/* true si y est une ligne de grille (a restaurer quand on efface la courbe) */
+/**
+ * @brief  Indique si une ordonnee correspond a une ligne de grille (a
+ *         restaurer quand on efface la courbe).
+ * @param  y  Ordonnee ecran (px).
+ * @retval true si c'est une ligne de grille.
+ */
 static bool grid_row(int16_t y)
 {
   for (int j = 0; j <= 4; j++) if (y == grid_y(j)) return true;
   return false;
 }
 
-/* Redessine fond, cadre, grille et graduations, et oublie la courbe tracee.
- * Appele a l'ouverture de la page et a chaque changement d'echelle. */
+/**
+ * @brief  Redessine fond, cadre, grille et graduations, et oublie la courbe
+ *         tracee. Appelee a l'ouverture de la page et a chaque changement
+ *         d'echelle.
+ */
 static void graph_axes(void)
 {
   char a[16];
@@ -462,7 +531,11 @@ static void graph_axes(void)
   for (int i = 0; i < GW; i++) { s_seg_lo[i] = -1; s_seg_hi[i] = -1; }
 }
 
-/* Enregistre un echantillon de profondeur toutes les G_DT_MS (appele a chaque UI_Task) */
+/**
+ * @brief  Enregistre un echantillon de profondeur toutes les G_DT_MS dans
+ *         l'anneau du graphique (appelee a chaque UI_Task, meme hors page
+ *         GRAPH).
+ */
 static void graph_sample(void)
 {
   uint32_t now = HAL_GetTick();
@@ -474,12 +547,14 @@ static void graph_sample(void)
   s_gdirty = true;
 }
 
-/* Trace la courbe. Chaque colonne c est un segment vertical reliant
- * l'echantillon precedent au courant : la courbe reste continue meme en
- * descente rapide. Une colonne n'est redessinee que si son segment a change
- * (efface l'ancien en couleur de fond, restaure la grille, trace le nouveau),
- * ce qui reste rapide meme quand la courbe defile.
- * full = true : redessin complet (ouverture de la page). */
+/**
+ * @brief  Trace la courbe. Chaque colonne c est un segment vertical reliant
+ *         l'echantillon precedent au courant : la courbe reste continue meme en
+ *         descente rapide. Une colonne n'est redessinee que si son segment a
+ *         change (efface l'ancien en couleur de fond, restaure la grille, trace
+ *         le nouveau), ce qui reste rapide meme quand la courbe defile.
+ * @param  full  true : redessin complet (ouverture de la page).
+ */
 static void graph_draw(bool full)
 {
   if (s_gn == 0u)
@@ -533,8 +608,12 @@ static void graph_draw(bool full)
 /* ========================================================================== */
 /* Pages : partie fixe                                                        */
 /* ========================================================================== */
-/* Invalide la memoire de toutes les zones de texte : au prochain GUI_TextSet,
- * elles seront entierement redessinees (apres un effacement d'ecran). */
+/**
+ * @brief  Invalide la memoire de toutes les zones de texte : au prochain
+ *         GUI_TextSet, elles seront entierement redessinees (apres un
+ *         effacement d'ecran). Force aussi le redessin de la barre de
+ *         progression et des lignes de scenario.
+ */
 static void reset_texts(void)
 {
   GText_t *all[] = { &g_title, &g_mode, &g_depth, &e_state, &e_dir, &e_hz, &e_speed, &e_imp,
@@ -545,8 +624,11 @@ static void reset_texts(void)
   s_scen_drawn = -1;
 }
 
-/* Elements fixes de la page courante (libelles, separateurs, cadres) et
- * ses boutons. Les valeurs sont ensuite remplies par ui_update(). */
+/**
+ * @brief  Dessine les elements fixes de la page courante (libelles,
+ *         separateurs, cadres) et ses boutons. Les valeurs sont ensuite
+ *         remplies par ui_update().
+ */
 static void draw_page_static(void)
 {
   uint16_t bg = T->bg;
@@ -592,9 +674,12 @@ static void draw_page_static(void)
 
 static void ui_update(void);
 
-/* Redessin complet : pave numerique s'il est ouvert, sinon barres du haut et
- * du bas + page courante, puis valeurs. A appeler apres tout changement qui
- * modifie la structure de l'ecran (page, theme, fermeture d'un pave...). */
+/**
+ * @brief  Redessin complet : pave numerique s'il est ouvert, sinon barres du
+ *         haut et du bas + page courante, puis valeurs. A appeler apres tout
+ *         changement qui modifie la structure de l'ecran (page, theme,
+ *         fermeture d'un pave...). Couteux (~60 ms).
+ */
 static void ui_full_redraw(void)
 {
   reset_texts();
@@ -610,8 +695,13 @@ static void ui_full_redraw(void)
 /* ========================================================================== */
 /* Pages : partie dynamique (toutes les 100 ms)                               */
 /* ========================================================================== */
-/* Barre de progression : px pixels remplis en couleur col, le reste en fond.
- * Ne fait rien si rien n'a change depuis le dernier dessin. */
+/**
+ * @brief  Barre de progression de la page ETAT : px pixels remplis en couleur
+ *         col, le reste en fond. Ne fait rien si rien n'a change depuis le
+ *         dernier dessin.
+ * @param  px   Longueur remplie (0..BAR_W).
+ * @param  col  Couleur du remplissage.
+ */
 static void draw_bar(int16_t px, uint16_t col)
 {
   if (px == s_bar_px && col == s_bar_col) return;
@@ -620,12 +710,20 @@ static void draw_bar(int16_t px, uint16_t col)
   s_bar_px = px; s_bar_col = col;
 }
 
-/* Concatenation bornee a la taille du tampon de destination */
+/**
+ * @brief  Concatenation bornee a la taille du tampon de destination.
+ * @param  d   Tampon de destination (chaine terminee par '\0').
+ * @param  sz  Taille du tampon.
+ * @param  s   Chaine a ajouter.
+ */
 static void strcat_s(char *d, size_t sz, const char *s) { strncat(d, s, sz - strlen(d) - 1); }
 
-/* Rafraichit les valeurs de la barre du haut et de la page courante.
- * Toutes les informations sont relues dans les modules (ENC_..., SCN_...,
- * g_set) : l'affichage suit donc aussi les commandes venues du terminal. */
+/**
+ * @brief  Rafraichit les valeurs de la barre du haut et de la page courante.
+ *         Toutes les informations sont relues dans les modules (ENC_..., SCN_...,
+ *         g_set) : l'affichage suit donc aussi les commandes venues du
+ *         terminal. Seuls les caracteres modifies sont redessines.
+ */
 static void ui_update(void)
 {
   char a[40], b[40];
@@ -760,8 +858,21 @@ static void ui_update(void)
 /* Callbacks du pave numerique : appeles sur OK avec une valeur deja verifiee
  * dans la plage passee a KP_Open(). Modifier g_set suffit pour que la valeur
  * soit sauvegardee en flash (SETTINGS_Task) et reaffichee. */
+/**
+ * @brief  Callback du pave : nouvelle vitesse VA.
+ * @param  v  Vitesse (m/h).
+ */
 static void kp_va_speed(double v)  { g_set.va_speed_mh  = (float)v; }
+/**
+ * @brief  Callback du pave : nouvelle profondeur VA.
+ * @param  v  Profondeur relative (m).
+ */
 static void kp_va_depth(double v)  { g_set.va_depth_m   = (float)v; }
+/**
+ * @brief  Callback du pave : nouvelle vitesse JOG / RUN. Si un RUN est en
+ *         cours, la vitesse est appliquee en direct (equivalent de SPEED).
+ * @param  v  Vitesse (m/h).
+ */
 static void kp_jog_speed(double v)
 {
   g_set.jog_speed_mh = (float)v;
@@ -772,6 +883,11 @@ static void kp_jog_speed(double v)
     else { char a[24], m[40]; fmt_trim(a, sizeof a, v, 1); snprintf(m, sizeof m, "SPEED %smh", a); CMD_Notify(m); }
   }
 }
+/**
+ * @brief  Callback du pave : nouvelle resolution, appliquee au codeur (refusee
+ *         si un mouvement est en cours) et tracee dans le terminal.
+ * @param  v  Resolution (imp/cm).
+ */
 static void kp_ppcm(double v)
 {
   ENC_Status_t st = ENC_SetPulsesPerCm(v);
@@ -779,9 +895,14 @@ static void kp_ppcm(double v)
   char a[24], m[40]; fmt_trim(a, sizeof a, v, 2); snprintf(m, sizeof m, "PPCM %s", a); CMD_Notify(m);
 }
 
-/* Lance un deplacement relatif de 'meters' (signe = sens : + descente,
- * - remontee) a 'speed_mh', converti en impulsions avec la resolution
- * courante. 'what' sert a la trace terminal ("VA", "JOG"). */
+/**
+ * @brief  Lance un deplacement relatif, converti en impulsions avec la
+ *         resolution courante. Les erreurs sont affichees dans la barre du
+ *         haut ; un deplacement reussi est trace dans le terminal.
+ * @param  meters    Distance signee (m) : + descente, - remontee.
+ * @param  speed_mh  Vitesse (m/h).
+ * @param  what      Nom pour la trace terminal ("VA", "JOG").
+ */
 static void do_move_m(double meters, double speed_mh, const char *what)
 {
   double p = meters * 100.0 * ENC_GetPulsesPerCm();
@@ -795,10 +916,13 @@ static void do_move_m(double meters, double speed_mh, const char *what)
   CMD_Notify(m);
 }
 
-/* Execute l'action du bouton 'id' (appele au relache, sauf STOP : a l'appui).
- * Les erreurs du module codeur (mouvement deja en cours, vitesse hors plage...)
- * sont affichees dans la barre du haut ; les actions reussies sont tracees
- * dans le terminal par CMD_Notify(). */
+/**
+ * @brief  Execute l'action d'un bouton (appelee au relache, sauf STOP : a
+ *         l'appui). Les erreurs du module codeur (mouvement deja en cours,
+ *         vitesse hors plage...) sont affichees dans la barre du haut ; les
+ *         actions reussies sont tracees dans le terminal par CMD_Notify().
+ * @param  id  Identifiant du bouton (B_xxx).
+ */
 static void act(int id)
 {
   if (id == B_STOP)
@@ -869,7 +993,11 @@ static void act(int id)
 /* ========================================================================== */
 /* Calibration tactile : 5 croix -> affine par moindres carres                */
 /* ========================================================================== */
-/* Croix de visee de 25 px centree en (x, y), point central rouge */
+/**
+ * @brief  Croix de visee de 25 px centree en (x, y), point central rouge.
+ * @param  x, y  Centre (px).
+ * @param  c     Couleur des branches.
+ */
 static void cal_cross(int16_t x, int16_t y, uint16_t c)
 {
   TFT_FillRect((uint16_t)(x - 12), (uint16_t)y, 25, 1, c);
@@ -877,9 +1005,11 @@ static void cal_cross(int16_t x, int16_t y, uint16_t c)
   TFT_FillRect((uint16_t)(x - 1), (uint16_t)(y - 1), 3, 3, T->danger);
 }
 
-/* Ecran de calibration : croix a toucher (etapes 0..4) ou resultat (etape 5)
- * avec l'ecart entre les croix et la position calculee par la nouvelle
- * calibration. Vert si l'ecart max est <= 6 px. */
+/**
+ * @brief  Ecran de calibration : croix a toucher (etapes 0..4) ou resultat
+ *         (etape 5) avec l'ecart entre les croix et la position calculee par la
+ *         nouvelle calibration. Vert si l'ecart max est <= 6 px.
+ */
 static void cal_draw(void)
 {
   char m[48];
@@ -917,7 +1047,10 @@ static void cal_draw(void)
   GUI_Button(&s_cal_redo, "REFAIRE", 2, GST_NORMAL, GIC_NONE, false);
 }
 
-/* Demarre la calibration en memorisant la calibration actuelle (pour REFAIRE / abandon) */
+/**
+ * @brief  Demarre la calibration en memorisant la calibration actuelle (pour
+ *         REFAIRE / abandon).
+ */
 static void cal_start(void)
 {
   TOUCH_Cal_t *cur = (TOUCH_Cal_t *)g_set.tcal;
@@ -928,8 +1061,11 @@ static void cal_start(void)
   cal_draw();
 }
 
-/* Termine la calibration : keep = true -> adopte et memorise (flash) la
- * nouvelle ; false -> restaure l'ancienne. Retour a la page REGL. */
+/**
+ * @brief  Termine la calibration et revient a la page REGL.
+ * @param  keep  true : adopte la nouvelle calibration et la memorise (flash) ;
+ *               false : restaure l'ancienne.
+ */
 static void cal_end(bool keep)
 {
   if (keep)
@@ -945,10 +1081,17 @@ static void cal_end(bool keep)
   ui_full_redraw();
 }
 
-/* Appele a chaque lecture tactile (20 ms) pendant la calibration.
- * p : doigt detecte ; press_edge / release_edge : appui / relache valides.
- * Pour chaque croix : les 2 premieres lectures de l'appui sont ignorees (le
- * doigt s'etale), les suivantes sont moyennees jusqu'au relache. */
+/**
+ * @brief  Appelee a chaque lecture tactile (20 ms) pendant la calibration.
+ *         Pour chaque croix : les 2 premieres lectures de l'appui sont ignorees
+ *         (le doigt s'etale), les suivantes sont moyennees jusqu'au relache.
+ *         Apres la 5e croix, la calibration est calculee puis testable ; abandon
+ *         apres CAL_TIMEOUT sans appui.
+ * @param  p             Doigt detecte a cette lecture.
+ * @param  t             Etat du tactile (brut et pixels).
+ * @param  press_edge    Appui valide (apres anti-rebond).
+ * @param  release_edge  Relache valide (apres anti-rebond).
+ */
 static void cal_touch(bool p, const TOUCH_State_t *t, bool press_edge, bool release_edge)
 {
   if (p) s_cal_t = HAL_GetTick();
@@ -994,13 +1137,16 @@ static void cal_touch(bool p, const TOUCH_State_t *t, bool press_edge, bool rele
 /* Tactile : appui -> bouton enfonce ; relache dedans -> action               */
 /*           STOP agit des l'appui                                            */
 /* ========================================================================== */
-/* Machine d'etat appelee toutes les TOUCH_MS :
- *   - appui confirme  : memorise le bouton sous le doigt, le dessine enfonce
- *                       (STOP agit tout de suite pour une reaction immediate) ;
- *   - doigt pose      : si le doigt sort du bouton, le bouton redevient normal
- *                       et l'action est annulee (comme sur un smartphone) ;
- *   - relache confirme: si le doigt etait encore sur le bouton -> act().
- * Pendant la calibration, les evenements sont passes a cal_touch(). */
+/**
+ * @brief  Machine d'etat du tactile, appelee toutes les TOUCH_MS :
+ *           - appui confirme  : memorise le bouton sous le doigt, le dessine
+ *                               enfonce (STOP agit tout de suite) ;
+ *           - doigt pose      : si le doigt sort du bouton, le bouton redevient
+ *                               normal et l'action est annulee ;
+ *           - relache confirme: si le doigt etait encore sur le bouton -> act().
+ *         Anti-rebond : 2 lectures identiques consecutives. Pendant la
+ *         calibration, les evenements sont passes a cal_touch().
+ */
 static void touch_task(void)
 {
   TOUCH_State_t t;
@@ -1086,8 +1232,14 @@ static void touch_task(void)
 /* ========================================================================== */
 /* API                                                                        */
 /* ========================================================================== */
-/* Ordre important : les reglages doivent etre charges avant d'initialiser le
- * tactile (calibration) et avant CMD_Init (affichage du PPCM memorise). */
+/**
+ * @brief  Initialise l'IHM : charge les reglages (PPCM, theme, calibration),
+ *         initialise l'ecran et le tactile, affiche le splash (5 s, non
+ *         bloquant) et initialise l'OLED.
+ *         Ordre important : les reglages doivent etre charges avant
+ *         d'initialiser le tactile (calibration) et avant CMD_Init (affichage
+ *         du PPCM memorise).
+ */
 void UI_Init(void)
 {
   SETTINGS_Load();
@@ -1104,19 +1256,24 @@ void UI_Init(void)
   OLED_UI_Init();                /* OLED SSD1306 (facultatif) : splash 5 s puis tableau de bord */
 }
 
-/* Ordonnanceur de l'IHM (cooperatif, base sur HAL_GetTick) :
- *   - a chaque appel : sauvegarde flash differee + echantillon du graphe ;
- *   - pendant le splash : barre de progression, puis 1er dessin complet ;
- *   - toutes les TOUCH_MS : lecture du tactile ;
- *   - toutes les UI_REFRESH_MS : mise a jour des valeurs (sauf pendant le
- *     pave numerique ou la calibration, qui gerent leur propre affichage). */
+/**
+ * @brief  Ordonnanceur de l'IHM (cooperatif, base sur HAL_GetTick), a appeler
+ *         en boucle dans main() :
+ *           - a chaque appel : sauvegarde flash differee, echantillon du graphe,
+ *             tache OLED ;
+ *           - pendant le splash : barre de progression, puis 1er dessin complet ;
+ *           - toutes les TOUCH_MS : lecture du tactile ;
+ *           - toutes les UI_REFRESH_MS : mise a jour des valeurs (sauf pendant
+ *             le pave numerique ou la calibration, qui gerent leur propre
+ *             affichage).
+ */
 void UI_Task(void)
 {
   uint32_t now = HAL_GetTick();
 
   SETTINGS_Task();
   graph_sample();
-  OLED_UI_Task();                /* avant le test du splash TFT : l'OLED vit sa propre vie */
+  OLED_UI_Task();                /* avant le test du splash TFT : l'OLED vit sa propre vie YOLO */
 
   if (s_splash)
   {

@@ -8,21 +8,50 @@
 #include "theme.h"
 #include <string.h>
 
+/**
+ * @brief  Teste si un point est dans un rectangle (bords droit et bas exclus).
+ * @param  r  Rectangle.
+ * @param  x  Abscisse du point (px).
+ * @param  y  Ordonnee du point (px).
+ * @retval true si le point est dans le rectangle.
+ */
 bool GUI_Hit(const GRect *r, uint16_t x, uint16_t y)
 {
   return x >= r->x && x < r->x + r->w && y >= r->y && y < r->y + r->h;
 }
 
+/**
+ * @brief  Largeur d'une chaine affichee avec la police 5x7.
+ * @param  s      Chaine.
+ * @param  scale  Facteur d'agrandissement.
+ * @retval Largeur en pixels.
+ */
 uint16_t GUI_TextW(const char *s, uint8_t scale)
 {
   return (uint16_t)(strlen(s) * TFT_CHAR_W(scale));
 }
 
+/**
+ * @brief  Affiche une chaine (enveloppe de TFT_DrawString).
+ * @param  x, y   Coin haut gauche (px).
+ * @param  s      Chaine.
+ * @param  fg     Couleur du texte (RGB565).
+ * @param  bg     Couleur du fond (RGB565).
+ * @param  scale  Facteur d'agrandissement.
+ */
 void GUI_Text(uint16_t x, uint16_t y, const char *s, uint16_t fg, uint16_t bg, uint8_t scale)
 {
   TFT_DrawString(x, y, s, fg, bg, scale);
 }
 
+/**
+ * @brief  Affiche une chaine centree dans un rectangle.
+ * @param  r      Rectangle de reference.
+ * @param  s      Chaine.
+ * @param  fg     Couleur du texte.
+ * @param  bg     Couleur du fond.
+ * @param  scale  Facteur d'agrandissement.
+ */
 void GUI_TextCenter(const GRect *r, const char *s, uint16_t fg, uint16_t bg, uint8_t scale)
 {
   uint16_t w = GUI_TextW(s, scale), h = (uint16_t)TFT_CHAR_H(scale);
@@ -31,6 +60,14 @@ void GUI_TextCenter(const GRect *r, const char *s, uint16_t fg, uint16_t bg, uin
   TFT_DrawString(x, y, s, fg, bg, scale);
 }
 
+/**
+ * @brief  Dessine un triangle isocele plein (fleche), ligne par ligne.
+ * @param  cx     Abscisse de l'axe du triangle.
+ * @param  ytop   Ordonnee du haut.
+ * @param  h      Hauteur (>= 2, sinon rien n'est dessine).
+ * @param  up     true : pointe en haut ; false : pointe en bas.
+ * @param  color  Couleur.
+ */
 void GUI_Triangle(uint16_t cx, uint16_t ytop, uint8_t h, bool up, uint16_t color)
 {
   if (h < 2u) return;
@@ -43,6 +80,11 @@ void GUI_Triangle(uint16_t cx, uint16_t ytop, uint8_t h, bool up, uint16_t color
   }
 }
 
+/**
+ * @brief  Dessine le contour d'un rectangle (trait de 1 px).
+ * @param  r  Rectangle.
+ * @param  c  Couleur.
+ */
 void GUI_Frame(const GRect *r, uint16_t c)
 {
   TFT_FillRect(r->x, r->y, r->w, 1, c);
@@ -51,6 +93,15 @@ void GUI_Frame(const GRect *r, uint16_t c)
   TFT_FillRect((uint16_t)(r->x + r->w - 1u), r->y, 1, r->h, c);
 }
 
+/**
+ * @brief  Couleurs d'un style de bouton dans le theme courant.
+ *         A l'etat enfonce, les couleurs sont inversees pour le retour visuel.
+ * @param  st       Style.
+ * @param  pressed  true si le bouton est enfonce.
+ * @param  bg       Recoit la couleur de fond.
+ * @param  fg       Recoit la couleur du texte.
+ * @param  bd       Recoit la couleur de la bordure.
+ */
 static void style_colors(GStyle_t st, bool pressed, uint16_t *bg, uint16_t *fg, uint16_t *bd)
 {
   switch (st)
@@ -73,6 +124,16 @@ static void style_colors(GStyle_t st, bool pressed, uint16_t *bg, uint16_t *fg, 
   }
 }
 
+/**
+ * @brief  Dessine un bouton : fond, cadre (ou soulignement pour l'onglet
+ *         actif), puis icone triangle optionnelle et libelle, centres.
+ * @param  r        Rectangle du bouton.
+ * @param  label    Libelle ("" pour une icone seule).
+ * @param  scale    Taille de police du libelle.
+ * @param  style    Style (normal, accent, danger, onglet...).
+ * @param  icon     Fleche haut / bas ou GIC_NONE.
+ * @param  pressed  true pour l'etat enfonce.
+ */
 void GUI_Button(const GRect *r, const char *label, uint8_t scale,
                 GStyle_t style, GIcon_t icon, bool pressed)
 {
@@ -98,6 +159,15 @@ void GUI_Button(const GRect *r, const char *label, uint8_t scale,
     TFT_DrawString((uint16_t)(x0 + iw), yt, label, fg, bg, scale);
 }
 
+/**
+ * @brief  Dessine un champ de saisie : valeur alignee a droite, suivie de
+ *         l'unite en petit.
+ * @param  r        Rectangle du champ.
+ * @param  value    Valeur deja formatee.
+ * @param  scale    Taille de police de la valeur.
+ * @param  unit     Unite (taille 2) ou NULL.
+ * @param  pressed  true pour l'etat enfonce.
+ */
 void GUI_Field(const GRect *r, const char *value, uint8_t scale, const char *unit, bool pressed)
 {
   uint16_t bg, fg, bd;
@@ -117,6 +187,15 @@ void GUI_Field(const GRect *r, const char *value, uint8_t scale, const char *uni
   }
 }
 
+/**
+ * @brief  Met a jour une zone de texte de largeur fixe en ne redessinant que
+ *         les caracteres qui ont change (tous si les couleurs changent).
+ *         Le texte est tronque ou complete par des espaces a f->width.
+ * @param  f    Zone de texte (position, taille, memoire de l'affichage).
+ * @param  txt  Nouveau texte.
+ * @param  fg   Couleur du texte.
+ * @param  bg   Couleur du fond.
+ */
 void GUI_TextSet(GText_t *f, const char *txt, uint16_t fg, uint16_t bg)
 {
   char s[GTEXT_MAX + 1];
@@ -139,4 +218,10 @@ void GUI_TextSet(GText_t *f, const char *txt, uint16_t fg, uint16_t bg)
   }
 }
 
+/**
+ * @brief  Invalide la memoire d'affichage d'une zone de texte : le prochain
+ *         GUI_TextSet() la redessinera entierement (a appeler apres un
+ *         effacement de l'ecran).
+ * @param  f  Zone de texte.
+ */
 void GUI_TextReset(GText_t *f) { memset(f->cur, 0xFF, sizeof f->cur); }

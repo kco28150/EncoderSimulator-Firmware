@@ -26,11 +26,21 @@
 #define DOUT()   ((Touch_MISO_GPIO_Port->IDR & Touch_MISO_Pin) != 0u)
 #define IRQ_LOW() ((Touch_IRQ_GPIO_Port->IDR & Touch_IRQ_Pin) == 0u)
 
+/**
+ * @brief  Courte attente pour cadencer le SPI logiciel (~0,4 us a 100 MHz).
+ */
 static inline void dly(void)            /* ~0,4 us a 100 MHz */
 {
   for (volatile int i = 0; i < 10; i++) { }
 }
 
+/**
+ * @brief  Echange un octet en SPI logiciel (mode 0, MSB en premier) : DIN est
+ *         positionne puis echantillonne par le XPT2046 sur le front montant de
+ *         CLK ; DOUT est lu pendant que CLK est haut.
+ * @param  out  Octet envoye sur DIN.
+ * @retval Octet lu sur DOUT.
+ */
 static uint8_t xfer(uint8_t out)
 {
   uint8_t in = 0;
@@ -46,6 +56,11 @@ static uint8_t xfer(uint8_t out)
   return in;
 }
 
+/**
+ * @brief  Lance une conversion et lit le resultat 12 bits. CS doit etre bas.
+ * @param  cmd  Octet de commande (CMD_X, CMD_Y, CMD_Z1, CMD_Z2).
+ * @retval Resultat de conversion (0..4095).
+ */
 static uint16_t read12(uint8_t cmd)     /* CS doit etre bas */
 {
   xfer(cmd);
@@ -54,6 +69,12 @@ static uint16_t read12(uint8_t cmd)     /* CS doit etre bas */
   return (uint16_t)(((hi << 8) | lo) >> 3) & 0x0FFFu;
 }
 
+/**
+ * @brief  Mediane d'un petit tableau (tri par insertion, sur place).
+ * @param  v  Echantillons (tries par la fonction).
+ * @param  n  Nombre d'echantillons.
+ * @retval Valeur mediane.
+ */
 static uint16_t median(uint16_t *v, int n)
 {
   for (int i = 1; i < n; i++)           /* tri insertion, n petit */
@@ -67,7 +88,11 @@ static uint16_t median(uint16_t *v, int n)
 
 static TOUCH_Cal_t s_cal;
 
-/* Calibration par defaut deduite des #define de touch.h */
+/**
+ * @brief  Calibration par defaut deduite des #define de touch.h (plages
+ *         brutes, inversions et echange des axes).
+ * @param  c  Recoit la calibration.
+ */
 void TOUCH_DefaultCal(TOUCH_Cal_t *c)
 {
   float kx = (float)TFT_WIDTH  / (float)(TOUCH_RAW_X_MAX - TOUCH_RAW_X_MIN);
@@ -83,11 +108,23 @@ void TOUCH_DefaultCal(TOUCH_Cal_t *c)
 #endif
 }
 
+/**
+ * @brief  Installe une calibration (copiee).
+ * @param  cal  Calibration a utiliser, ou NULL pour la calibration par defaut.
+ */
 void TOUCH_SetCal(const TOUCH_Cal_t *cal)
 {
   if (cal) s_cal = *cal; else TOUCH_DefaultCal(&s_cal);
 }
 
+/**
+ * @brief  Applique une calibration affine a une mesure brute :
+ *         x = a.rx + b.ry + c ; y = d.rx + e.ry + f, arrondi au plus proche.
+ *         Le resultat n'est pas borne a l'ecran.
+ * @param  c       Calibration.
+ * @param  rx, ry  Mesure brute (0..4095).
+ * @param  x, y    Recoivent la position en pixels.
+ */
 void TOUCH_Map(const TOUCH_Cal_t *c, float rx, float ry, int16_t *x, int16_t *y)
 {
   float fx = c->a * rx + c->b * ry + c->c;
@@ -96,7 +133,13 @@ void TOUCH_Map(const TOUCH_Cal_t *c, float rx, float ry, int16_t *x, int16_t *y)
   *y = (int16_t)(fy + (fy >= 0 ? 0.5f : -0.5f));
 }
 
-/* Resolution 3x3 (Cramer) */
+/**
+ * @brief  Resout le systeme 3x3 m.r = v par la methode de Cramer.
+ * @param  m  Matrice du systeme.
+ * @param  v  Second membre.
+ * @param  r  Recoit la solution.
+ * @retval false si le systeme est singulier (|det| < 1e-9).
+ */
 static bool solve3(double m[3][3], const double v[3], double r[3])
 {
   double det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
@@ -114,6 +157,16 @@ static bool solve3(double m[3][3], const double v[3], double r[3])
   return true;
 }
 
+/**
+ * @brief  Calcule une calibration affine par moindres carres (equations
+ *         normales) a partir de n couples mesure brute / position ecran.
+ *         Les mesures sont normalisees sur [0, 1] pour le conditionnement.
+ * @param  rx, ry  Mesures brutes.
+ * @param  sx, sy  Positions ecran attendues (px).
+ * @param  n       Nombre de points (>= 3, non alignes).
+ * @param  out     Recoit la calibration.
+ * @retval false si n < 3 ou si les points sont alignes.
+ */
 bool TOUCH_ComputeCal(const float *rx, const float *ry, const float *sx, const float *sy,
                       int n, TOUCH_Cal_t *out)
 {
@@ -137,6 +190,11 @@ bool TOUCH_ComputeCal(const float *rx, const float *ry, const float *sx, const f
 }
 
 /* -------------------------------------------------------------------------- */
+/**
+ * @brief  Initialise le XPT2046 : lignes SPI au repos, calibration par defaut
+ *         si aucune n'a ete installee, puis une premiere conversion pour armer
+ *         la sortie T_IRQ (mode PD = 00).
+ */
 void TOUCH_Init(void)
 {
   if (s_cal.a == 0.0f && s_cal.b == 0.0f) TOUCH_DefaultCal(&s_cal);
@@ -146,6 +204,14 @@ void TOUCH_Init(void)
   CS_H();
 }
 
+/**
+ * @brief  Lit le tactile si T_IRQ signale un appui : pression (Z1, Z2), puis
+ *         7 mesures X / Y filtrees par mediane, et conversion en pixels bornee
+ *         a l'ecran. raw_x / raw_y / z sont renseignes meme si la pression est
+ *         insuffisante (utile pour la calibration).
+ * @param  t  Recoit l'etat du tactile.
+ * @retval true si un appui valide est detecte (t->x, t->y renseignes).
+ */
 bool TOUCH_Read(TOUCH_State_t *t)
 {
   uint16_t sx[NSAMP], sy[NSAMP];

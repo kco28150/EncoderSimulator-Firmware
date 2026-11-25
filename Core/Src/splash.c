@@ -38,6 +38,10 @@
   #define C_NAME  APAGEO_BLUE
 #endif
 
+/**
+ * @brief  Dessine l'ecran de demarrage : fond, logo centre et nom en bas,
+ *         couleurs selon SPLASH_STYLE.
+ */
 void SPLASH_Draw(void)
 {
   TFT_FillScreen(C_BG);
@@ -47,6 +51,11 @@ void SPLASH_Draw(void)
                  SPLASH_NAME_W, SPLASH_NAME_H, splash_name_a4, C_NAME, C_BG);
 }
 
+/**
+ * @brief  Avance la barre de progression du splash (style 3 uniquement, sans
+ *         effet sinon). Seule la partie nouvelle de la barre est dessinee.
+ * @param  elapsed  Temps ecoule depuis SPLASH_Draw() (ms, borne a SPLASH_MS).
+ */
 void SPLASH_Progress(uint32_t elapsed)
 {
 #if SPLASH_STYLE == 3

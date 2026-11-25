@@ -39,6 +39,13 @@ static bool     s_act_touch = false;   /* true si elle venait du tactile (CMD_No
 /* ========================================================================== */
 /* Bas niveau UART                                                            */
 /* ========================================================================== */
+/**
+ * @brief  Routine d'interruption USART2 (appelee par USART2_IRQHandler a la
+ *         place de la HAL). Range l'octet recu dans le tampon circulaire s_rx.
+ *         Un octet en erreur de trame ou de bruit est ignore ; si le tampon est
+ *         plein, l'octet est perdu. La lecture SR puis DR acquitte aussi
+ *         ORE / FE / NE.
+ */
 void CMD_UartIRQ(void)
 {
   uint32_t sr = USART2->SR;
@@ -58,6 +65,10 @@ void CMD_UartIRQ(void)
   }
 }
 
+/**
+ * @brief  Extrait un octet du tampon de reception (cote boucle principale).
+ * @retval Octet recu (0..255), ou -1 si le tampon est vide.
+ */
 static int rx_get(void)
 {
   if (s_rx_tail == s_rx_head) return -1;
@@ -66,12 +77,20 @@ static int rx_get(void)
   return c;
 }
 
+/**
+ * @brief  Envoie un caractere sur USART2 en mode bloquant (attente de TXE).
+ * @param  c  Caractere a envoyer.
+ */
 static void tx_char(char c)
 {
   while ((USART2->SR & USART_SR_TXE) == 0u) { }
   USART2->DR = (uint8_t)c;
 }
 
+/**
+ * @brief  Envoie une chaine terminee par '\0' sur USART2 (bloquant).
+ * @param  s  Chaine a envoyer.
+ */
 static void tx_str(const char *s)
 {
   while (*s) tx_char(*s++);
@@ -80,6 +99,14 @@ static void tx_str(const char *s)
 /* ========================================================================== */
 /* Formatage / parsing numerique (sans printf flottant ni libm)               */
 /* ========================================================================== */
+/**
+ * @brief  Formate un nombre en virgule fixe sans printf flottant
+ *         (newlib-nano n'a pas %f), arrondi au plus proche.
+ * @param  buf  Tampon de sortie.
+ * @param  sz   Taille du tampon.
+ * @param  v    Valeur a formater.
+ * @param  dec  Nombre de decimales (0..4, borne a 4).
+ */
 static void fmt_fixed(char *buf, size_t sz, double v, unsigned dec)
 {
   static const uint32_t p10[] = {1u, 10u, 100u, 1000u, 10000u};
@@ -104,7 +131,14 @@ static void fmt_fixed(char *buf, size_t sz, double v, unsigned dec)
   }
 }
 
-/* Lit [+|-]chiffres[.|,chiffres] puis renvoie le suffixe (unite) dans *unit. */
+/**
+ * @brief  Lit un nombre [+|-]chiffres[.|,chiffres] (virgule ou point
+ *         decimal) puis renvoie le suffixe (unite) dans *unit.
+ * @param  s     Chaine a analyser.
+ * @param  val   Recoit la valeur lue.
+ * @param  unit  Recoit un pointeur sur le premier caractere apres le nombre.
+ * @retval true si au moins un chiffre a ete lu.
+ */
 static bool parse_num(const char *s, double *val, const char **unit)
 {
   double v = 0.0, scale = 1.0;
@@ -128,11 +162,26 @@ static bool parse_num(const char *s, double *val, const char **unit)
   return true;
 }
 
+/**
+ * @brief  Convertit une chaine ASCII en minuscules, sur place.
+ * @param  s  Chaine a convertir.
+ */
 static void to_lower(char *s) { for (; *s; s++) if (*s >= 'A' && *s <= 'Z') *s += 32; }
+/**
+ * @brief  Convertit une chaine ASCII en majuscules, sur place.
+ * @param  s  Chaine a convertir.
+ */
 static void to_upper(char *s) { for (; *s; s++) if (*s >= 'a' && *s <= 'z') *s -= 32; }
 
-/* Distance -> impulsions. Unites : (rien) | imp | mm | cm | m */
-/* def_mult : multiplicateur applique quand aucune unite n'est donnee */
+/**
+ * @brief  Convertit un jeton de distance en impulsions.
+ *         Unites : (rien) | imp (ou i) | mm | cm | m, converties avec la
+ *         resolution courante (PPCM). Le jeton est mis en minuscules sur place.
+ * @param  tok       Jeton a analyser (ex. "12.5cm").
+ * @param  pulses    Recoit le nombre d'impulsions signe, arrondi au plus proche.
+ * @param  def_mult  Multiplicateur applique quand aucune unite n'est donnee.
+ * @retval false si syntaxe ou unite invalide, ou resultat hors +/-2e9.
+ */
 static bool parse_distance_def(char *tok, int32_t *pulses, double def_mult)
 {
   double v; const char *u;
@@ -153,13 +202,25 @@ static bool parse_distance_def(char *tok, int32_t *pulses, double def_mult)
   return true;
 }
 
-/* MOVE : sans unite = impulsions */
+/**
+ * @brief  Distance de la commande MOVE : sans unite = impulsions.
+ * @param  tok     Jeton a analyser.
+ * @param  pulses  Recoit le nombre d'impulsions signe.
+ * @retval false si le jeton est invalide.
+ */
 static bool parse_distance(char *tok, int32_t *pulses)
 {
   return parse_distance_def(tok, pulses, 1.0);
 }
 
-/* Frequence -> Hz. Unites : (rien) | hz | mh | m/h */
+/**
+ * @brief  Convertit un jeton de frequence en Hz.
+ *         Unites : (rien) | hz | mh | m/h (m/h converti avec la resolution
+ *         courante). Le jeton est mis en minuscules sur place.
+ * @param  tok  Jeton a analyser (ex. "800mh").
+ * @param  hz   Recoit la frequence en Hz (signee).
+ * @retval false si syntaxe ou unite invalide.
+ */
 static bool parse_freq(char *tok, double *hz)
 {
   double v; const char *u;
@@ -172,7 +233,12 @@ static bool parse_freq(char *tok, double *hz)
   return true;
 }
 
-/* "6025.00 imp / 120.500 cm" */
+/**
+ * @brief  Formate une position : "6025.00 imp / 120.500 cm".
+ * @param  buf     Tampon de sortie.
+ * @param  sz      Taille du tampon.
+ * @param  states  Position en etats de Gray (4 etats par impulsion).
+ */
 static void fmt_pos(char *buf, size_t sz, int32_t states)
 {
   char a[20], b[20];
@@ -181,7 +247,12 @@ static void fmt_pos(char *buf, size_t sz, int32_t states)
   snprintf(buf, sz, "%s imp / %s cm", a, b);
 }
 
-/* "1111.111 Hz (800.0 m/h)" */
+/**
+ * @brief  Formate une frequence : "1111.111 Hz (800.0 m/h)".
+ * @param  buf  Tampon de sortie.
+ * @param  sz   Taille du tampon.
+ * @param  hz   Frequence en Hz.
+ */
 static void fmt_freq(char *buf, size_t sz, double hz)
 {
   char a[20], b[20];
@@ -190,7 +261,11 @@ static void fmt_freq(char *buf, size_t sz, double hz)
   snprintf(buf, sz, "%s Hz (%s m/h)", a, b);
 }
 
-/* "PPCM 50.000 imp/cm  Fmax 1388.889 Hz (1000.0 m/h)  1 m/h = 1.389 Hz" */
+/**
+ * @brief  Envoie la configuration courante :
+ *         "PPCM 50.000 imp/cm  Fmax 1388.889 Hz (1000.0 m/h)  1 m/h = 1.389 Hz".
+ * @param  prefix  Texte ajoute en tete de ligne ("" ou "OK ").
+ */
 static void print_config(const char *prefix)
 {
   char a[20], f[40], k[20], buf[120];
@@ -201,6 +276,11 @@ static void print_config(const char *prefix)
   tx_str(buf);
 }
 
+/**
+ * @brief  Envoie le message "ERR ..." correspondant a un code d'erreur du
+ *         module codeur.
+ * @param  st  Code renvoye par une fonction ENC_xxx / SCN_Start.
+ */
 static void err_status(ENC_Status_t st)
 {
   char f[40], buf[96];
@@ -220,7 +300,12 @@ static void err_status(ENC_Status_t st)
   }
 }
 
-/* Duree estimee d'un scenario (s) : integrale de dd / v(d) */
+/**
+ * @brief  Duree estimee d'un scenario : integrale de dd / v(d), calculee par
+ *         la methode du point milieu sur 400 pas.
+ * @param  sc  Scenario.
+ * @retval Duree en secondes.
+ */
 static double scen_duration_s(const SCN_Def_t *sc)
 {
   double D = (sc->dist_cm < 0.0) ? -sc->dist_cm : sc->dist_cm;
@@ -234,6 +319,12 @@ static double scen_duration_s(const SCN_Def_t *sc)
   return t_h * 3600.0;
 }
 
+/**
+ * @brief  Envoie une ligne decrivant un scenario : numero, nom, distance,
+ *         vitesses min / max et duree estimee.
+ * @param  i       Numero du scenario (1..SCN_Count()).
+ * @param  prefix  Texte ajoute en tete de ligne ("SCEN " ou "OK SCEN ").
+ */
 static void scen_describe(uint16_t i, const char *prefix)
 {
   const SCN_Def_t *sc = SCN_Get(i);
@@ -250,6 +341,9 @@ static void scen_describe(uint16_t i, const char *prefix)
 /* ========================================================================== */
 /* Commandes                                                                  */
 /* ========================================================================== */
+/**
+ * @brief  Envoie l'aide : liste des commandes, unites et exemples.
+ */
 static void cmd_help(void)
 {
   tx_str("Commandes :\r\n"
@@ -268,6 +362,14 @@ static void cmd_help(void)
          "Ex : VA 300 2.5   VA 500 -50cm   MOVE 120.5cm 800mh   RUN -500mh\r\n");
 }
 
+/**
+ * @brief  Interprete et execute une ligne de commande.
+ *         La ligne est decoupee en 4 mots maximum ; la commande est insensible
+ *         a la casse et un '?' final est ignore (POS? == POS). Repond "OK ...",
+ *         une valeur ou "ERR ...". Memorise l'instant de la commande (activite
+ *         "PC" affichee sur l'OLED).
+ * @param  line  Ligne terminee par '\0' (modifiee : strtok, casse).
+ */
 static void execute(char *line)
 {
   char *argv[4];
@@ -433,8 +535,17 @@ static void execute(char *line)
 /* ========================================================================== */
 /* API                                                                        */
 /* ========================================================================== */
+/**
+ * @brief  Affiche l'invite de saisie "> ".
+ */
 static void prompt(void) { tx_str("> "); }
 
+/**
+ * @brief  Initialise l'interpreteur : active l'interruption de reception
+ *         USART2 (RXNE) puis affiche la banniere, la configuration, l'aide et
+ *         l'invite. A appeler apres MX_USART2_UART_Init() et apres le chargement
+ *         des reglages (pour afficher le PPCM memorise).
+ */
 void CMD_Init(void)
 {
   USART2->CR1 |= USART_CR1_RXNEIE;
@@ -445,6 +556,12 @@ void CMD_Init(void)
   prompt();
 }
 
+/**
+ * @brief  Trace dans le terminal une action faite depuis l'ecran tactile
+ *         ("[TACTILE] msg"), puis reaffiche l'invite et la saisie en cours.
+ *         L'activite est marquee comme venant du tactile (affichage OLED).
+ * @param  msg  Texte de l'action (ex. "STOP", "VA 300 2.5").
+ */
 void CMD_Notify(const char *msg)
 {
   s_act_t = HAL_GetTick() | 1u;
@@ -456,12 +573,25 @@ void CMD_Notify(const char *msg)
   for (uint16_t i = 0; i < s_len; i++) tx_char(s_line[i]);
 }
 
+/**
+ * @brief  Instant de la derniere commande recue (terminal ou tactile).
+ * @param  from_touch  Si non NULL, recoit true si elle venait du tactile.
+ * @retval Valeur de HAL_GetTick() a la derniere commande, 0 si aucune.
+ */
 uint32_t CMD_LastActivity(bool *from_touch)
 {
   if (from_touch) *from_touch = s_act_touch;
   return s_act_t;
 }
 
+/**
+ * @brief  Tache de l'interpreteur, a appeler en boucle dans main() :
+ *         - signale la fin d'un MOVE ("DONE pos=...") et reaffiche la saisie ;
+ *         - allume la LED LD2 pendant un mouvement ;
+ *         - traite les caracteres recus : echo, retour arriere, Echap (efface
+ *           la ligne) et execution sur CR, LF ou CRLF.
+ *         Non bloquant (hors emission des reponses).
+ */
 void CMD_Process(void)
 {
   int c;
